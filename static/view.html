@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YFM · Set</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400..700;1,8..60,400..700&family=Noto+Serif+SC:wght@400;600&display=swap">
+<link rel="stylesheet" href="/static/theme.css">
+<script src="/static/track.js"></script>
+<script src="/static/common.js"></script>
+<script src="/static/nav.js" defer></script>
+<style>
+  /* The set's date, then its buttons: side by side on a wide screen, stacked on a phone. */
+  .bar { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 16px; }
+  .bar h1 { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+  .bar-actions { display: flex; gap: 8px; }
+  .bar-actions > * { white-space: nowrap; }
+  .banner { margin: 8px 16px 0; padding: 10px 12px 10px 14px; border-radius: 8px; background: var(--warn-soft);
+            display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 15px; }
+  .banner span { flex: 1; }
+  .banner button { padding: 8px 14px; font-size: 14px; background: var(--warn); border-color: var(--warn); color: var(--accent-text); }
+  main { padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 26px; }
+  .song { width: 100%; max-width: 900px; display: flex; flex-direction: column; gap: 10px; }
+  .song-head { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; padding: 0 2px; min-height: 40px; }
+  .song-head h2 { flex: 1 1 auto; min-width: 0; margin: 0; font: 600 18px/1.3 var(--serif); }
+  .song-head h2 .n { font: 500 14px var(--sans); color: var(--muted); margin-right: 8px; }
+  .song-head h2 .key { margin-left: 4px; }
+  .capo { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); }
+  .capo select { font-size: 14px; padding: 6px 8px; background: var(--panel); }
+  .note { color: var(--muted); font-size: 14px; margin: 0; }
+  .hint { margin: 0; background: var(--warn-soft); border-radius: 8px; padding: 9px 12px; font-size: 14px; }
+  .song img { width: 100%; background: #fff; border-radius: 3px; box-shadow: 0 1px 4px rgba(0,0,0,.35); display: block; }
+  main.stale img { opacity: .35; transition: opacity .2s; }
+  main.stale select { pointer-events: none; }
+  main > .spinner { width: 44px; height: 44px; margin: 60px auto; }
+  /* Play mode: the pages alone, their margins cropped off, filling the screen. */
+  .pg { background: #fff; }
+  .song-tag { display: none; }
+  body.play .sky, body.play .song-head, body.play .hint, body.play main > .note { display: none; }
+  body.play main { padding: 0; gap: 0; }
+  body.play .song { max-width: none; gap: 0; }
+  body.play .song img { border-radius: 0; box-shadow: none; }
+  body.play .pg { overflow: hidden; }
+  body.play .song-tag { display: block; font-size: 12px; line-height: 1.3; padding: 4px 12px; color: var(--muted);
+                        background: var(--bg); border-bottom: 1px solid var(--line); }
+  body.play .banner { position: fixed; top: 0; left: 0; right: 0; z-index: 9; margin: 0; border-radius: 0; padding: 6px 12px; }
+  #exitPlay { position: fixed; top: 8px; right: 8px; z-index: 10; width: 36px; height: 36px; padding: 0;
+              border-radius: 50%; border: 0; background: var(--exit-bg); color: var(--text);
+              display: flex; align-items: center; justify-content: center; opacity: .75; }
+  #exitPlay:hover, #exitPlay:focus-visible { opacity: 1; }
+  @media (max-width: 699px) {
+    .bar h1, .bar-actions { flex-basis: 100%; }
+    .bar-actions > * { flex: 1 1 auto; padding: 10px 6px; }
+    .bar-actions #downloadBtn { flex-grow: 1.4; }
+    main { padding: 10px 8px; }
+    .song-head { padding: 0 6px; }
+  }
+  @media (min-width: 700px) {
+    .bar { padding-top: 12px; }
+    .bar h1 { font-size: 34px; }
+    .banner { margin: 8px 24px 0; }
+    .song-head h2 { font-size: 21px; }
+    .capo, .capo select { font-size: 15px; }
+  }
+</style>
+</head>
+<body>
+<header class="sky">
+  <nav class="topnav" aria-label="Main">
+    <span class="logo" id="logo" role="img" aria-label="诸圣堂 All Saints' Church"></span>
+    <a href="/"><span class="full">Find songs</span><span class="short">Songs</span></a>
+    <a href="/sets" data-tab="sets" aria-current="page"><span class="full">Setlists</span><span class="short">Sets</span></a>
+    <a href="/convert"><span class="full">Convert PDF</span><span class="short">Convert</span></a>
+  </nav>
+  <div class="page-head bar">
+    <h1 id="title">Set</h1>
+    <div class="bar-actions">
+      <button class="secondary" id="playBtn" disabled title="The pages alone, filling the screen">Fullscreen</button>
+      <a class="button secondary" id="editBtn" href="#">Edit</a>
+      <button id="downloadBtn" disabled>Download PDF</button>
+    </div>
+  </div>
+</header>
+<div class="banner" id="banner" role="status" hidden>
+  <span id="bannerText">This set has changed since you opened it.</span>
+  <button id="reloadBtn">Reload</button>
+</div>
+<main id="main"><div class="spinner" id="spinner"></div></main>
+<button id="exitPlay" hidden aria-label="Leave full screen" title="Leave full screen"><svg width="14" height="14"
+  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"/></svg></button>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const setId = location.pathname.split("/").pop();
+// A share link (/s/<code>) opens a hidden snapshot of someone's song picker: no date, no Edit,
+// and it never changes, so there's nothing to watch for.
+const shareCode = location.pathname.startsWith("/s/") ? setId : null;
+const capoKey = shareCode ? "s:" + shareCode : setId;  // where this page's capos are remembered
+if (shareCode) document.querySelector(".topnav [aria-current]")?.removeAttribute("aria-current");
+let set = null;
+// The PDF's name: the set's date, or for a share link its name, else the song's title ("Songs" for several).
+const pdfName = () => set.date ? nameFor(set.date) : set.name || (set.songs.length === 1 ? set.songs[0].title : "Songs");
+
+// ---------------------------------------------------------------- capo
+// Each viewer's capo per song, remembered on this device (savedCapos, in common.js). The shape
+// is what counts: if the team changes the key, the capo moves to keep the shape.
+function saveCapo(slug, choice) {
+  const all = savedCapos(), mine = all[capoKey] || {};
+  if (choice) mine[slug] = choice; else delete mine[slug];
+  all[capoKey] = mine;
+  try { localStorage.setItem(CAPOS, JSON.stringify(all)); } catch (_) {}
+  if (yourName.get() && !shareCode) {  // and under the viewer's name, for their other devices (sets only)
+    fetch(`${yourName.capoUrl()}/${setId}/${encodeURIComponent(slug)}`, choice
+      ? { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(choice) }
+      : { method: "DELETE" }).catch(() => {});
+  }
+}
+// Saving your name (in the bar) brings the capos saved under it: show them.
+addEventListener("namechange", () => { if (set && yourName.get()) { applySavedCapos(); showPages(); } });
+const ordinal = n => n + (["th", "st", "nd", "rd"][n] || "th");
+const capoText = c => `${ordinal(c.fret)} fret (${c.shape})`;
+let capos = {}, hints = {};  // slug -> the capo in use; slug -> a note about it
+
+// Match the saved capos to the set's current keys.
+function applySavedCapos() {
+  const mine = savedCapos()[capoKey] || {};
+  capos = {}; hints = {};
+  for (const s of playable()) {
+    const saved = mine[s.slug];
+    if (!saved) continue;
+    const now = s.capos.find(c => c.shape === saved.shape);
+    if (!now) {
+      const key = s.to || s.key;  // the shape doesn't fit the new key
+      hints[s.slug] = key === saved.shape ? `The key changed to ${key}: no capo needed for ${key} shapes.`
+        : `The key changed to ${key}: ${saved.shape} shapes would need a capo above the 7th fret, so the capo is off.`;
+      saveCapo(s.slug, null);
+      continue;
+    }
+    capos[s.slug] = now;
+    if (now.fret !== saved.fret) {
+      hints[s.slug] = `The key changed: capo moved to the ${ordinal(now.fret)} fret.`;
+      saveCapo(s.slug, now);
+    }
+  }
+}
+function capoMenu(s) {
+  if (s.transposable === false) return `<span class="note">Fixed chart, no capo options</span>`;
+  if (!s.capos.length) return "";
+  const cur = capos[s.slug];
+  return `<label class="capo">Capo <select data-slug="${esc(s.slug)}" aria-label="Capo for ${esc(s.title)}">
+      <option value="">None</option>
+      ${s.capos.map(c => `<option value="${esc(c.shape)}" ${cur && cur.shape === c.shape ? "selected" : ""}>${capoText(c)}</option>`).join("")}
+    </select></label>`;
+}
+$("main").addEventListener("change", e => {
+  const sel = e.target.closest("select[data-slug]");
+  if (!sel) return;
+  const song = playable().find(s => s.slug === sel.dataset.slug);
+  const choice = song.capos.find(c => c.shape === sel.value) || null;
+  if (choice) capos[song.slug] = choice; else delete capos[song.slug];
+  delete hints[song.slug];
+  saveCapo(song.slug, choice);
+  track("capo_changed", { slug: song.slug, title: song.title, capo: choice ? choice.fret : 0 });
+  showPages();
+});
+
+// ---------------------------------------------------------------- pages
+// The songs as the setlist API takes them, with this viewer's capos. Songs gone from the
+// library are left out.
+function playable() { return set.songs.filter(s => !s.missing); }
+function setlistBody(what = "preview") {
+  return JSON.stringify({ songs: playable().map(s => ({ slug: s.slug, to: s.to, capo: capos[s.slug]?.shape })),
+                          layout: set.layout, columns: set.columns, paper: set.paper, name: pdfName(),
+                          scale: sharp && what === "preview" ? 2.5 : undefined });
+}
+// The PDF, built ahead on a phone once the pages show, so Download PDF can share it at once.
+const ahead = pdfAhead(() => post("pdf"), on => { pdfBusy($("downloadBtn"), on); $("downloadBtn").disabled = on; });
+async function post(what) {
+  const r = await fetch("/api/setlist/" + what, { method: "POST", headers: { "Content-Type": "application/json" }, body: setlistBody(what) });
+  if (!r.ok) throw new Error((await r.json()).error || "Couldn't build the set.");
+  return what === "pdf" ? r.blob() : r.json();
+}
+
+async function load() {
+  $("banner").hidden = true;
+  $("main").innerHTML = `<div class="spinner"></div>`;
+  $("downloadBtn").disabled = true;
+  try {
+    const r = await fetch(shareCode ? `/api/shares/${shareCode}` : `/api/sets/${setId}`);
+    if (r.status === 404) throw new Error(shareCode ? "This link has expired, or isn't right." : "This set has been deleted.");
+    if (!r.ok) throw new Error("Couldn't load the songs.");
+    set = await r.json();
+    const heading = shareCode ? set.name || (set.songs.length === 1 ? set.songs[0].title : `${set.songs.length} songs`)
+                              : fullDate(set.date);
+    document.title = `YFM · ${heading}`;
+    $("title").textContent = heading;
+    $("editBtn").hidden = !!shareCode;
+    if (!shareCode) $("editBtn").href = `/?set=${set.id}`;
+    await yourName.fetchCapos();
+    applySavedCapos();
+    await showPages();
+  } catch (err) {
+    $("main").innerHTML = `<p class="error">${esc(err.message)}</p>`;
+  }
+}
+
+let pagesSeq = 0;
+async function showPages() {
+  const seq = ++pagesSeq, songs = playable();
+  const gone = set.songs.filter(s => s.missing).map(s =>
+    `<p class="note">${esc(s.title)} ${s.slug ? "is no longer" : "isn't"} in the library.</p>`).join("");
+  if (!songs.length) { $("main").innerHTML = gone || `<p class="note">This set has no songs yet.</p>`; return; }
+  $("main").classList.add("stale");
+  $("downloadBtn").disabled = $("playBtn").disabled = true;
+  try {
+    const { pages, songs: spans } = await post("preview");
+    if (seq !== pagesSeq) return;  // a newer capo choice is already rendering
+    $("main").innerHTML = gone + songs.map((s, i) => `
+      <section class="song" id="song-${i}">
+        <div class="song-head">
+          <h2><span class="n">${i + 1}</span>${esc(s.title)} <span class="key">${esc(s.to || s.key || "")}</span></h2>
+          ${capoMenu(s)}
+        </div>
+        ${hints[s.slug] ? `<p class="hint">${esc(hints[s.slug])}</p>` : ""}
+        <div class="song-tag">${esc(songTag(s, i))}</div>
+        ${pages.slice(spans[i].first, spans[i].first + spans[i].pages).map((src, j) =>
+          `<div class="pg"><img src="${src}" alt="${esc(s.title)}, page ${j + 1} of ${spans[i].pages}"></div>`).join("")}
+      </section>`).join("");
+    crops = null;
+    if (playing) await cropPages();
+    $("playBtn").disabled = false;
+    $("downloadBtn").disabled = $("downloadBtn").hasAttribute("aria-busy");  // busy: its PDF is building
+    ahead.prepare(setlistBody("pdf"));
+  } catch (err) {
+    if (seq === pagesSeq) $("main").innerHTML = `<p class="error">${esc(err.message)}</p>`;
+  } finally {
+    if (seq === pagesSeq) $("main").classList.remove("stale");
+  }
+}
+
+// ---------------------------------------------------------------- play mode
+// For playing from a phone: full screen where the browser allows it (not on iPhone), the
+// pages' white margins cropped off, sharper images, and the screen kept awake.
+let playing = false, sharp = false, crops = null, wakeLock = null;
+const songTag = (s, i) => [`${i + 1}. ${s.title}`, s.to || s.key,
+  capos[s.slug] && `capo ${capos[s.slug].fret} (${capos[s.slug].shape})`].filter(Boolean).join(" · ");
+
+// Where each page's ink is, as fractions of the page. A song's pages share their left and
+// right edges, so its text stays the same size from page to page.
+async function cropPages() {
+  const imgs = [...$("main").querySelectorAll(".pg img")];
+  await Promise.all(imgs.map(img => img.decode().catch(() => {})));
+  crops = [];
+  for (const song of $("main").querySelectorAll(".song")) {
+    const boxes = [...song.querySelectorAll(".pg img")].map(inkBox);
+    const left = Math.min(...boxes.map(b => b.x0)), right = Math.max(...boxes.map(b => b.x1));
+    crops.push(...boxes.map(b => ({ ...b, x0: left, x1: right })));
+  }
+  showCrops();
+}
+function inkBox(img) {
+  const w = Math.max(1, Math.round(img.naturalWidth / 4)), h = Math.max(1, Math.round(img.naturalHeight / 4));
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const g = c.getContext("2d", { willReadFrequently: true });
+  g.drawImage(img, 0, 0, w, h);
+  const px = g.getImageData(0, 0, w, h).data;
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = (y * w + x) * 4;
+    if (px[i] + px[i + 1] + px[i + 2] < 690) {  // darker than near-white
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+  }
+  if (x1 < 0) return { x0: 0, y0: 0, x1: 1, y1: 1 };  // a blank page: keep it whole
+  const pad = 0.015;
+  return { x0: Math.max(0, x0 / w - pad), y0: Math.max(0, y0 / h - pad),
+           x1: Math.min(1, (x1 + 1) / w + pad), y1: Math.min(1, (y1 + 1) / h + pad) };
+}
+// Show only the inked part: the image is enlarged inside a box that hides the rest.
+function showCrops() {
+  [...$("main").querySelectorAll(".pg")].forEach((pg, i) => {
+    const img = pg.firstElementChild, c = playing && crops && crops[i];
+    if (!c) { pg.style.aspectRatio = img.style.cssText = ""; return; }
+    const cw = c.x1 - c.x0, ch = (c.y1 - c.y0) * img.naturalHeight / img.naturalWidth;
+    pg.style.aspectRatio = `${cw} / ${ch}`;
+    // Percentage margins are fractions of the box's width, top ones included.
+    img.style.cssText = `width:${100 / cw}%;max-width:none;margin-left:${-100 * c.x0 / cw}%;` +
+      `margin-top:${-100 * c.y0 * img.naturalHeight / img.naturalWidth / cw}%`;
+  });
+}
+
+async function keepAwake() {
+  try { wakeLock = await navigator.wakeLock?.request("screen"); } catch (_) {}
+}
+document.addEventListener("visibilitychange", () => { if (playing && !document.hidden) keepAwake(); });
+
+async function play() {
+  track("played", { songs: playable().length });
+  playing = true;
+  document.body.classList.add("play");
+  $("exitPlay").hidden = false;
+  const root = document.documentElement;
+  (root.requestFullscreen || root.webkitRequestFullscreen)?.call(root)?.catch?.(() => {});
+  keepAwake();
+  const top = firstSongOnScreen();
+  if (!sharp) { sharp = true; await showPages(); }  // sharper images, then cropped
+  else await cropPages();
+  document.getElementById(top)?.scrollIntoView();
+}
+function stopPlaying() {
+  if (!playing) return;
+  const top = firstSongOnScreen();
+  playing = false;
+  document.body.classList.remove("play");
+  $("exitPlay").hidden = true;
+  showCrops();
+  wakeLock?.release().catch(() => {});
+  wakeLock = null;
+  if (document.fullscreenElement || document.webkitFullscreenElement)
+    (document.exitFullscreen || document.webkitExitFullscreen)?.call(document)?.catch?.(() => {});
+  document.getElementById(top)?.scrollIntoView();
+}
+// The song at the top of the screen, so switching modes keeps your place.
+function firstSongOnScreen() {
+  return [...document.querySelectorAll(".song")].find(el => el.getBoundingClientRect().bottom > 40)?.id;
+}
+$("playBtn").onclick = play;
+$("exitPlay").onclick = stopPlaying;
+document.addEventListener("keydown", e => { if (e.key === "Escape") stopPlaying(); });
+// Leaving full screen (Esc, a swipe, the back button) leaves play mode too.
+for (const ev of ["fullscreenchange", "webkitfullscreenchange"])
+  document.addEventListener(ev, () => { if (!(document.fullscreenElement || document.webkitFullscreenElement)) stopPlaying(); });
+
+$("downloadBtn").onclick = async () => {
+  try {
+    await savePdf(ahead, setlistBody("pdf"), pdfName() + ".pdf");
+    track("pdf_downloaded", { songs: set.songs.length, from: shareCode ? "share link" : "set" });
+  }
+  catch (err) { alert(err.message); }
+};
+
+// Someone may change the set while it's open: check when the tab comes back and every 30 s,
+// and offer to reload rather than moving the pages under anyone's fingers.
+async function checkForChanges() {
+  if (!set || shareCode || document.hidden || !$("banner").hidden) return;
+  try {
+    const r = await fetch(`/api/sets/${setId}`);
+    if (r.status === 404) {
+      $("bannerText").textContent = "This set has been deleted.";
+      $("reloadBtn").hidden = true;
+      $("banner").hidden = false;
+    } else if (r.ok && (await r.json()).version !== set.version) {
+      $("bannerText").textContent = "This set has changed since you opened it.";
+      $("reloadBtn").hidden = false;
+      $("banner").hidden = false;
+    }
+  } catch (_) {}
+}
+$("reloadBtn").onclick = load;
+watchForChanges(checkForChanges);
+load();
+</script>
+</body>
+</html>

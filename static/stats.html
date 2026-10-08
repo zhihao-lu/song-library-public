@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>YFM · Stats</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400..700&display=swap">
+<link rel="stylesheet" href="/static/theme.css">
+<style>
+  /* One hue for every chart (the dataviz reference blue): bars, and the heatmap's light->dark ramp. */
+  :root { --bar: #3987e5; --heat-0: #172b4a; --heat-1: #3987e5; }
+  @media (prefers-color-scheme: light) { :root { --bar: #2a78d6; --heat-0: #e6effb; --heat-1: #184f95; } }
+  body { margin: 0; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin-bottom: 18px; }
+  h1 { font: 600 28px/1.2 var(--serif); margin: 0; flex: 1 1 260px; }
+  .sub { color: var(--muted); font-size: 12px; font-weight: 600; margin: 14px 0 6px; }
+  .range { color: var(--muted); font-size: 13px; }
+  select { width: auto; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .tile { background: var(--panel); border-radius: 10px; padding: 12px 14px; }
+  .tile b { display: block; font: 600 26px/1.1 var(--serif); }
+  .tile span { color: var(--muted); font-size: 13px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  .card h2 { font: 600 18px/1.2 var(--serif); margin: 0 0 4px; }
+  .card .what { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  .wide { grid-column: 1 / -1; }
+  /* Visits per day: thin bars, rounded at the data end, from a recessive baseline. */
+  .days { display: flex; align-items: flex-end; gap: 2px; height: 140px; border-bottom: 1px solid var(--line-strong); }
+  .days .col { flex: 1; height: 100%; display: flex; align-items: flex-end; position: relative; }
+  .days .col i { display: block; width: 100%; background: var(--bar); border-radius: 4px 4px 0 0; min-height: 0; }
+  .days .col:hover i { filter: brightness(1.2); }
+  .axis { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; margin-top: 4px; }
+  /* When: weekday x hour, one hue light->dark. */
+  .heat { display: grid; grid-template-columns: 30px repeat(24, minmax(0, 1fr)); gap: 2px; font-size: 11px; color: var(--muted); }
+  .heat .h { overflow: visible; white-space: nowrap; }
+  .heat .c { aspect-ratio: 1; border-radius: 3px; background: var(--field); }
+  .heat .h { text-align: center; }
+  /* Horizontal bars with the number beside them (funnel, counts). */
+  .hbars { display: grid; grid-template-columns: minmax(90px, 40%) 1fr auto; gap: 6px 10px; align-items: center; font-size: 14px; }
+  .hbars .bar { height: 12px; background: var(--field); border-radius: 0 4px 4px 0; overflow: hidden; }
+  .hbars .bar i { display: block; height: 100%; background: var(--bar); border-radius: 0 4px 4px 0; }
+  .hbars .n { color: var(--text); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+  .hbars .n small { color: var(--muted); }
+  .hbars .k { overflow-wrap: anywhere; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; color: var(--muted); font-weight: 600; font-size: 12px; padding: 4px 6px; }
+  td { padding: 6px; border-top: 1px solid var(--line); vertical-align: top; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  details.j { border-top: 1px solid var(--line); padding: 8px 0; }
+  details.j summary { cursor: pointer; display: flex; justify-content: flex-start; text-align: left; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+  details.j summary .jname { font-weight: 600; }
+  details.j summary .meta { color: var(--muted); font-size: 13px; }
+  .tag { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--soft); }
+  ol.steps { margin: 8px 0 0; padding-left: 20px; font-size: 13px; }
+  ol.steps li { padding: 2px 0; }
+  ol.steps .t { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 6px; }
+  ol.steps .d { color: var(--muted); }
+  .empty { color: var(--muted); font-size: 14px; }
+  .tip { position: fixed; z-index: 10; pointer-events: none; padding: 6px 9px; border-radius: 6px; font-size: 12px;
+         background: var(--popover, var(--panel)); color: var(--text); border: 1px solid var(--line-strong); }
+  .error { color: var(--err); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>How the site is used</h1>
+    <span class="range" id="range"></span>
+    <label class="visually-hidden" for="days">Period</label>
+    <select id="days"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option>
+      <option value="90">Last 90 days</option><option value="365">Last year</option></select>
+  </header>
+  <div id="out"><p class="empty">Loading…</p></div>
+</div>
+<div class="tip" id="tip" hidden></div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const fmt = n => Number(n).toLocaleString();
+const time = iso => iso.slice(11, 16);
+const day = iso => new Date(iso.slice(0, 10) + "T00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+const secs = s => s < 60 ? `${Math.round(s)} s` : s < 3600 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(1)} h`;
+
+function tiles(t) {
+  return `<div class="tiles">${[
+    [t.visits, "visits"], [t.devices, "devices"], [t.people, "people with a name"], [t.pdfs, "PDFs downloaded"],
+    [t.shares, "share links made"], [t.sets_saved, "sets saved"], [secs(t.median_visit_seconds), "typical visit"],
+  ].map(([n, l]) => `<div class="tile"><b>${typeof n === "number" ? fmt(n) : n}</b><span>${l}</span></div>`).join("")}</div>`;
+}
+
+function days(rows) {
+  const max = Math.max(1, ...rows.map(r => r.visits));
+  return `<div class="days" role="img" aria-label="Visits per day">${rows.map(r =>
+    `<div class="col" data-tip="${esc(day(r.day))}: ${r.visits} visit${r.visits === 1 ? "" : "s"}, ${r.devices} device${r.devices === 1 ? "" : "s"}">
+      <i style="height:${(r.visits / max) * 100}%"></i></div>`).join("")}</div>
+    <div class="axis"><span>${esc(day(rows[0].day))}</span><span>most: ${max}</span><span>${esc(day(rows.at(-1).day))}</span></div>`;
+}
+
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+function heat(h) {
+  const max = Math.max(1, ...h.flat());
+  let html = `<div class="heat" role="img" aria-label="Visits by weekday and hour"><span></span>` +
+    Array.from({ length: 24 }, (_, i) => `<span class="h">${i % 3 === 0 ? i : ""}</span>`).join("");
+  h.forEach((row, d) => {
+    html += `<span>${DAYS[d]}</span>` + row.map((n, hr) => {
+      const mix = n ? Math.round(15 + 85 * n / max) : 0;
+      return `<span class="c" data-tip="${DAYS[d]} ${hr}:00–${hr + 1}:00: ${n} visit${n === 1 ? "" : "s"}"
+        style="${n ? `background:color-mix(in oklab, var(--heat-1) ${mix}%, var(--heat-0))` : ""}"></span>`;
+    }).join("");
+  });
+  return html + "</div>";
+}
+
+// [[label, n], ...] as bars; `of` makes each a share of that number.
+function hbars(rows, of) {
+  if (!rows.length) return `<p class="empty">Nothing yet.</p>`;
+  const max = Math.max(1, ...rows.map(r => r[1]));
+  return `<div class="hbars">${rows.map(([k, n]) => `<span class="k">${esc(k)}</span>
+    <span class="bar"><i style="width:${(n / max) * 100}%"></i></span>
+    <span class="n">${fmt(n)}${of ? ` <small>${Math.round(100 * n / Math.max(1, of))}%</small>` : ""}</span>`).join("")}</div>`;
+}
+
+function card(title, what, body, wide) {
+  return `<section class="card${wide ? " wide" : ""}"><h2>${title}</h2>${what ? `<p class="what">${what}</p>` : ""}${body}</section>`;
+}
+
+const LABEL = { page_view: "opened", page_leave: "left", click: "pressed", change: "changed", search: "searched",
+  song_added: "added", song_removed: "removed", key_changed: "changed key", reordered: "reordered", tab: "tab",
+  pdf_downloaded: "downloaded PDF", share_link: "made a share link", set_saved: "saved set", name_set: "set their name",
+  capo_changed: "capo", played: "played", tab_kept: "stayed on Service sets (unsaved changes)",
+  draft_offered: "was offered their unsaved setlist", draft_continued: "continued their unsaved setlist",
+  draft_discarded: "discarded their unsaved setlist" };
+function step(s) {
+  const d = s.data || {}, what = LABEL[s.event] || s.event;
+  const detail = s.event === "click" ? d.label : s.event === "search" ? `“${d.q}” (${d.results ?? "?"} results)`
+    : s.event === "song_added" || s.event === "song_removed" ? d.title || d.slug
+    : s.event === "key_changed" ? `${d.title || d.slug} → ${d.to}` : s.event === "tab" ? d.mode
+    : s.event === "page_view" ? s.page : s.event === "page_leave" ? `after ${secs((d.ms || 0) / 1000)}`
+    : s.event === "change" ? `${d.id} = ${d.value}` : s.event === "set_saved" ? `${d.how || ""} ${d.date || ""}`
+    : s.event === "pdf_downloaded" ? `${d.songs ?? "?"} songs` : "";
+  return `<li><span class="t">${time(s.at)}</span>${esc(what)} <span class="d">${esc(detail)}</span></li>`;
+}
+function journeys(list) {
+  if (!list.length) return `<p class="empty">No visits yet.</p>`;
+  return list.map(j => `<details class="j"><summary>
+      <span class="jname">${esc(j.name || "Guest " + j.device)}</span>
+      <span class="meta">${esc(day(j.start))} ${time(j.start)}–${time(j.end)} · ${j.phone ? "phone" : "computer"} · ${esc(j.look)} · ${j.steps.length} steps</span>
+      ${j.outcomes.map(o => `<span class="tag">${esc(LABEL[o])}</span>`).join("")}
+    </summary><ol class="steps">${j.steps.map(step).join("")}</ol></details>`).join("");
+}
+
+function people(list) {
+  if (!list.length) return `<p class="empty">Nobody has typed a name yet.</p>`;
+  return `<table><thead><tr><th>Name</th><th class="num">Visits</th><th class="num">PDFs</th><th class="num">Sets</th>
+    <th class="num">Links</th><th>Last seen</th></tr></thead><tbody>${list.map(p => `<tr><td>${esc(p.name)}</td>
+    <td class="num">${p.visits}</td><td class="num">${p.pdfs}</td><td class="num">${p.sets}</td><td class="num">${p.shares}</td>
+    <td>${esc(day(p.last))} ${time(p.last)}</td></tr>`).join("")}</tbody></table>`;
+}
+
+function outcomesByTab(o) {
+  const rows = [];
+  for (const [mode, c] of Object.entries(o))
+    for (const [ev, n] of Object.entries(c)) rows.push([`${mode === "once" ? "One-time" : "Service sets"}: ${LABEL[ev]}`, n]);
+  return hbars(rows.sort((a, b) => b[1] - a[1]));
+}
+
+async function load() {
+  const r = await fetch(`/api/stats?days=${$("days").value}`);
+  if (!r.ok) { $("out").innerHTML = `<p class="error">Couldn't load the stats (${r.status}).</p>`; return; }
+  const s = await r.json(), opened = s.funnel[0][1];
+  $("range").textContent = `${day(s.range.start)} – ${day(s.range.end)}`;
+  $("out").innerHTML = tiles(s.totals) + `<div class="grid">` +
+    card("Visits per day", "A visit is a run of activity on one device with no 30-minute gap.", days(s.by_day), true) +
+    card("When people come", "Visits by the hour they started (Singapore time). Darker is more.", heat(s.heat), true) +
+    card("What the builder visits came to", "Of the visits that opened Find songs, how many got to each step.", hbars(s.funnel, opened)) +
+    card("Tabs", "Times each tab was picked.", hbars(s.tabs.map(([m, n]) => [m === "once" ? "One-time" : "Service sets", n])) +
+      `<p class="sub">What was done in each</p>` + outcomesByTab(s.outcomes_by_tab)) +
+    card("Pages", "Pages opened.", hbars(s.pages)) +
+    card("Devices and looks", "Pages opened, by device and by look.", hbars([...s.phones, ...s.looks.map(([l, n]) => [`${l} look`, n])])) +
+    card("What people press", "Buttons, tabs and links, by their label.", hbars(s.clicks)) +
+    card("Songs added", "", hbars(s.songs_added)) +
+    card("Searches", "What people typed, when they stopped typing.", hbars(s.searches)) +
+    card("Searches with no results", "Songs people looked for but couldn't find.", hbars(s.searches_no_results)) +
+    card("People", "Everyone who typed a name in the bar.", people(s.people), true) +
+    card("Recent visits", "The latest 50, newest first. Open one to see each step.", journeys(s.journeys), true) +
+    `</div>`;
+}
+$("days").onchange = load;
+load();
+
+// A tooltip for anything with data-tip (bars and heatmap cells).
+const tip = $("tip");
+document.addEventListener("pointermove", e => {
+  const el = e.target.closest?.("[data-tip]");
+  if (!el) { tip.hidden = true; return; }
+  tip.textContent = el.dataset.tip; tip.hidden = false;
+  const w = tip.offsetWidth;
+  tip.style.left = Math.min(innerWidth - w - 8, e.clientX + 12) + "px";
+  tip.style.top = (e.clientY - 36) + "px";
+});
+</script>
+</body>
+</html>

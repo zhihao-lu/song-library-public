@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YFM · Setlists</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400..700;1,8..60,400..700&family=Noto+Serif+SC:wght@400;600&display=swap">
+<link rel="stylesheet" href="/static/theme.css">
+<script src="/static/track.js"></script>
+<script src="/static/common.js"></script>
+<script src="/static/nav.js" defer></script>
+<style>
+  main { padding: 8px 16px 32px; }
+  section + section { margin-top: 36px; }
+  .section-title { margin-left: 8px; }
+  /* Coming sets: a box each, one under another on a phone. */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; align-items: start; }
+  .card { display: flex; flex-direction: column; gap: 12px; }
+  .card h3 { margin: 0; font: 600 21px/1.2 var(--serif); letter-spacing: -.01em; }
+  .card ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+  .card li { display: flex; gap: 10px; align-items: baseline; }
+  .card li .n { flex: none; width: 14px; text-align: right; font-size: 13px; color: var(--muted); }
+  .card li .t { flex: 1; min-width: 0; font: 16px/1.35 var(--serif); overflow-wrap: anywhere; }
+  .card li .k { flex: none; font-family: var(--serif); }
+  .card li.missing .t { font-style: italic; color: var(--muted); }
+  .btns { display: flex; gap: 8px; }
+  .btns > .button { flex: 1; }
+  /* Past sets: compact boxes two to a row, to plan from (what was sung, in what key, who led). */
+  .past { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+  .pcard { background: var(--panel); border-radius: 8px; padding: 12px 12px 6px; display: flex; flex-direction: column;
+           gap: 7px; font-size: 13.5px; line-height: 1.3; min-width: 0; }
+  .pcard h3 { margin: 0; font: 600 16px/1.25 var(--serif); }
+  .pcard .leader { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pcard ol { list-style: none; margin: 0; padding: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
+  .pcard li { display: flex; gap: 6px; }
+  .pcard li .t { flex: 1; min-width: 0; color: var(--soft); overflow-wrap: anywhere; }
+  .pcard li.missing .t { font-style: italic; color: var(--muted); }
+  .pcard .view { align-self: flex-start; padding: 6px 0; font-weight: 600; }
+  .more { display: block; width: 100%; margin-top: 14px; }
+  .empty { color: var(--muted); font-size: 15px; margin: 0 8px; }
+  .empty a { font-weight: 600; }
+  .error { font-size: 15px; margin: 0 8px 16px; }
+  @media (min-width: 700px) {
+    main { padding: 8px 32px 48px; }
+    .section-title { margin-left: 0; font-size: 24px; }
+    .grid { gap: 16px; }
+    .card { padding: 18px; }
+    .past { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+    .pcard { padding: 12px 14px 6px; }
+    .more { width: 280px; margin: 18px auto 0; }
+    .empty, .error { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+<header class="sky">
+  <nav class="topnav" aria-label="Main">
+    <span class="logo" id="logo" role="img" aria-label="诸圣堂 All Saints' Church"></span>
+    <a href="/"><span class="full">Find songs</span><span class="short">Songs</span></a>
+    <a href="/sets" data-tab="sets" aria-current="page"><span class="full">Setlists</span><span class="short">Sets</span></a>
+    <a href="/convert"><span class="full">Convert PDF</span><span class="short">Convert</span></a>
+  </nav>
+  <div class="page-head"><h1>Setlists</h1></div>
+</header>
+
+<main>
+  <p class="error" id="error" hidden></p>
+  <section>
+    <h2 class="section-title">Upcoming</h2>
+    <div class="grid" id="upcoming"></div>
+    <p class="empty" id="noUpcoming" hidden>No upcoming sets. In <a href="/">Find songs</a>, add songs, open <b>Service sets</b>, pick a date and press <b>Save as set</b>.</p>
+  </section>
+  <section id="pastSection" hidden>
+    <h2 class="section-title">Past sets</h2>
+    <div class="past" id="past"></div>
+    <button class="secondary more" id="more" hidden>Show older sets</button>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const BIN = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+  stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>`;
+const gone = s => s.missing ? ` class="missing" title="${s.slug ? "No longer" : "Not"} in the library"` : "";
+
+// A coming set: its date, its songs in their keys, and View, Edit and Delete (the bin).
+function card(set) {
+  const songs = set.songs.map((s, i) => `<li${gone(s)}><span class="n">${i + 1}</span><span class="t">${esc(s.title)}</span>
+    <span class="k key">${esc(s.to || s.key || "")}</span></li>`).join("");
+  return `<article class="card" data-id="${set.id}">
+    <h3>${esc(fullDate(set.date))}</h3>
+    <ol>${songs}</ol>
+    <div class="btns"><a class="button" href="/sets/${set.id}">View</a><a class="button secondary" href="/?set=${set.id}">Edit</a>
+      <button class="secondary icon-btn" data-delete="${set.id}" title="Delete this set"
+        aria-label="Delete the set for ${esc(longDate(set.date))}">${BIN}</button></div>
+  </article>`;
+}
+
+// A past set: who led it, its songs and the keys they were sung in, and View (Edit is on the View page).
+function pastCard(set) {
+  const songs = set.songs.map(s => `<li${gone(s)}><span class="t">${esc(s.title)}</span>
+    <span class="key">${esc(s.to || s.key || "")}</span></li>`).join("");
+  return `<article class="pcard" data-id="${set.id}">
+    <div><h3>${esc(fullDate(set.date, { weekday: false }))}</h3>${set.leader
+      ? `<div class="leader" title="Worship leader">${esc(set.leader)}</div>` : ""}</div>
+    <ol>${songs}</ol>
+    <a class="view" href="/sets/${set.id}" aria-label="View the set for ${esc(longDate(set.date))}">View</a>
+  </article>`;
+}
+
+// Past sets come 10 at a time, newest first.
+const PAGE = 10;
+let past = [], showing = PAGE;
+function renderPast() {
+  $("past").innerHTML = past.slice(0, showing).map(pastCard).join("");
+  $("more").hidden = showing >= past.length;
+  $("pastSection").hidden = !past.length;
+}
+$("more").onclick = () => { showing += PAGE; renderPast(); };
+
+async function load() {
+  try {
+    const r = await fetch("/api/sets");
+    if (!r.ok) throw new Error("Couldn't load the sets.");
+    const listing = await r.json();
+    ({ past } = listing);
+    sets = [...listing.upcoming, ...past];
+    $("upcoming").innerHTML = listing.upcoming.map(card).join("");
+    $("noUpcoming").hidden = listing.upcoming.length > 0;
+    renderPast();
+    $("error").hidden = true;
+  } catch (err) {
+    showError(err.message);
+  }
+}
+let sets = [];
+function showError(message) { $("error").textContent = message; $("error").hidden = false; }
+document.addEventListener("click", async e => {
+  const del = e.target.closest("[data-delete]");
+  if (!del) return;
+  const set = sets.find(s => s.id === +del.dataset.delete);
+  if (!confirm(`Delete the set for ${longDate(set.date)}? This can't be undone.`)) return;
+  const r = await fetch(`/api/sets/${set.id}`, { method: "DELETE" });
+  await load();
+  if (!r.ok && r.status !== 404) showError("Couldn't delete the set.");
+});
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,1149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YFM</title>
+<script>
+// Links copied from here may arrive through another site's redirect (which keeps the #...),
+// as /#s=<code> for a share link or /#set=<id> for a set: open that page.
+(() => {
+  const m = location.hash.match(/^#(s|set)=([A-Za-z0-9]+)$/);
+  if (m) location.replace(m[1] === "s" ? "/s/" + m[2] : "/sets/" + m[2]);
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400..700;1,8..60,400..700&family=Noto+Serif+SC:wght@400;600&display=swap">
+<link rel="stylesheet" href="/static/theme.css">
+<script src="/static/track.js"></script>
+<script src="/static/common.js"></script>
+<script src="/static/nav.js" defer></script>
+<style>
+  :root {
+    /* Each source's colour: YFM green, ASE blue, MM red (text on its soft background). */
+    --yfm: #6fd88c; --yfm-soft: #16361f; --ase: #8db8ff; --ase-soft: #182a4a; --mm: #ff8f86; --mm-soft: #3e1714;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --yfm: #1a7f37; --yfm-soft: #dcf5e3; --ase: #1d5fb4; --ase-soft: #e1ecfb; --mm: #b42318; --mm-soft: #fde8e6; }
+  }
+  .status { padding: 12px 24px 0; color: var(--muted); font-size: 13px; }
+  .status button { font-size: 12px; padding: 3px 9px; margin-left: 6px; background: transparent; color: var(--text);
+                   border-color: var(--line-strong); }
+  .status .wait { margin-left: 6px; }
+  .status.warn { color: var(--warn); }
+  main { padding: 0 24px 24px; display: grid; grid-template-columns: minmax(360px, 500px) 1fr; gap: 16px; align-items: start; }
+  .side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  input[type=search], input[type=text], select { width: 100%; }
+  /* The search box, with a magnifying glass in it. */
+  .search { position: relative; }
+  .search svg { position: absolute; left: 12px; top: 50%; margin-top: -9px; color: var(--muted); pointer-events: none; }
+  .search input { padding: 11px 12px 11px 38px; font-size: 16px; }
+  /* The set's date: our own box showing the date, with the browser's date input laid invisibly
+     over it, so a tap opens the phone's picker but Safari's odd date box never shows. */
+  .date-field { position: relative; display: flex; align-items: center; gap: 10px; background: var(--field);
+                border: 1px solid var(--line-strong); border-radius: 8px; padding: 9px 12px; min-height: 44px; }
+  .date-field:focus-within { border-color: var(--muted); }
+  .date-field svg { flex: none; color: var(--muted); }
+  .date-field .when { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .date-field .chev { color: var(--muted); font-size: 12px; }
+  .date-field .when.unset { color: var(--muted); }
+  /* A finger-sized ✕ at the right end; the invisible date input stops short of it. */
+  .clear-date { position: relative; z-index: 1; align-self: stretch; width: 44px; margin: -9px -12px -9px 0;
+                padding: 0; display: flex; align-items: center; justify-content: center; background: none;
+                border: 0; border-left: 1px solid var(--line-strong); border-radius: 0 8px 8px 0; color: var(--muted);
+                font-size: 16px; font-weight: 400; }
+  .date-field.clearable input { right: 44px; width: auto; }
+  .date-field.clearable .chev { display: none; }
+  .date-field input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; margin: 0; padding: 0;
+                      border: 0; cursor: pointer; -webkit-appearance: none; appearance: none; font-size: 16px; }
+  /* The setlist's two kinds, as folder tabs on top of the card: One-time for anyone, Service sets for
+     worship leaders. The chosen tab is the card's own colour, so the two read as one folder. */
+  .tabs { display: flex; gap: 4px; margin-bottom: -16px; }  /* sits right on the card (.side's gap) */
+  .tabs [role=tab] { flex: 0 1 auto; min-height: 46px; padding: 11px 20px; font: 600 17px/1.2 var(--serif);
+                     color: var(--muted); background: var(--accent-soft); border: 0; border-radius: 10px 10px 0 0; }
+  .tabs [role=tab]:hover { color: var(--text); }
+  .tabs [role=tab][aria-selected=true] { color: var(--text); background: var(--panel); }
+  .setlist-card { border-top-left-radius: 0; }
+  .setlist-card > .part { margin: 20px 0 10px; font: 600 18px/1.2 var(--serif); }
+  label .optional { font-weight: 400; }
+  .tab-help { font-size: 13px; color: var(--muted); margin: 0 0 12px; }
+  .tab-help a { color: var(--text); font-weight: 600; }
+  .date-note { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .date-note.warn { color: var(--warn); }
+  .sources { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 10px; font-size: 12px; }
+  .sources[hidden] { display: none; }
+  .sources .label { color: var(--muted); margin-right: 2px; }
+  /* The source filter: a quiet line of text, each source with a small dot in its colour (greyed out when off). */
+  .sources .chip { display: inline-flex; align-items: center; gap: 5px; padding: 6px 4px; margin: -6px 0; font-size: 12px;
+                   font-weight: 400; line-height: 18px; border: 0; border-radius: 4px; background: none;
+                   color: var(--soft); }
+  .sources .chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--src); }
+  .sources .chip:hover { color: var(--text); }
+  .sources .chip[aria-pressed="false"] { opacity: .45; }
+  .sources .chip[aria-pressed="false"]::before { background: none; box-shadow: inset 0 0 0 1px var(--muted); }
+  .sources .on { color: var(--warn); font-weight: 600; }
+  .sources .clear { padding: 0 4px; font-size: 12px; font-weight: 600; line-height: 18px; border: 0; background: none;
+                    color: var(--text); text-decoration: underline; }
+  .results { list-style: none; margin: 8px 0 0; padding: 0; max-height: 32vh; overflow: auto; }
+  .results li { display: flex; align-items: center; gap: 8px; padding: 10px 4px; border-bottom: 1px solid var(--line);
+                cursor: pointer; border-radius: 6px; }
+  .results li:hover { background: var(--accent-soft); }
+  .results li.empty { display: block; border-bottom: 0; }
+  .results li.empty:hover { background: none; }
+  .results .add { padding: 5px 10px; font-size: 13px; }
+  .results li.added { cursor: default; }
+  .results li.added:hover { background: none; }
+  .results .added-tag { color: var(--muted); font-weight: 600; font-size: 13px; white-space: nowrap; border: 1px solid transparent; }
+  .grow { flex: 1; min-width: 0; }
+  .title { font-weight: 500; overflow-wrap: anywhere; }
+  .title .tag { font-weight: 400; color: var(--muted); }
+  /* A source as a chip: after a song's title, and in the filter. */
+  .src { --src: var(--muted); --src-soft: var(--line); }
+  .src-yfm { --src: var(--yfm); --src-soft: var(--yfm-soft); }
+  .src-ase { --src: var(--ase); --src-soft: var(--ase-soft); }
+  .src-mm { --src: var(--mm); --src-soft: var(--mm-soft); }
+  .title .src { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 999px; font-size: 10px;
+                font-weight: 700; letter-spacing: .02em; line-height: 15px; vertical-align: 1px;
+                color: var(--src); background: var(--src-soft); }
+  .path { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .path .opening { color: var(--soft); font-style: italic; }
+  /* A song's key, in red like every key on the site. */
+  .badge { font-size: 12px; font-weight: 700; color: var(--key); background: var(--key-soft);
+           border-radius: 6px; padding: 1px 7px; white-space: nowrap; }
+  .empty { color: var(--muted); font-size: 14px; padding: 12px 4px; }
+  .row { display: flex; gap: 10px; align-items: end; margin-bottom: 12px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 5px; font-weight: 600; }
+  #songs { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  #songs li { display: flex; align-items: center; gap: 6px; padding: 8px 8px 8px 2px; background: var(--field);
+              border: 1px solid var(--line); border-radius: 8px; }
+  #songs li.dragging { position: relative; z-index: 2; border-color: var(--muted);
+                       box-shadow: 0 8px 20px rgba(4,8,16,.5); }
+  .grip { cursor: grab; color: var(--muted); padding: 6px 8px; touch-action: none;
+          user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  .grip:active { cursor: grabbing; }
+  .num { color: var(--muted); font-size: 12px; width: 14px; text-align: right; flex: none; }
+  #songs .title { font-size: 14.5px; }
+  #songs select { width: auto; max-width: 150px; padding: 5px 6px; font-size: 13px; background: var(--panel); }
+  .note { font-size: 12px; color: var(--warn); }
+  .del { background: none; border: 0; color: var(--muted); padding: 4px 6px; font-size: 15px; font-weight: 400; }
+  .del:hover { color: var(--err); }
+  .btns { display: flex; gap: 8px; }
+  .btns button { flex: 1; padding: 11px 4px; font-size: 14px; }
+  .error { color: var(--err); font-size: 14px; margin-top: 10px; }
+  .saved { color: var(--muted); font-size: 14px; margin-top: 10px; overflow-wrap: anywhere; }
+  .saved a { color: var(--text); font-weight: 600; }
+  .notice { background: var(--warn-soft); color: var(--text); border-radius: 8px; padding: 10px 12px;
+            margin: 0 0 12px; font-size: 14px; }
+  .notice .btns { margin-top: 8px; flex-wrap: wrap; }
+  .notice button { padding: 6px 10px; font-size: 13px; flex: 0 1 auto; }
+  .preview { padding: 0; overflow: hidden; position: sticky; top: 16px; height: calc(100vh - 32px);
+             display: flex; flex-direction: column; }
+  .preview-bar { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+  .preview-bar h2 { margin: 0; flex: 1; font: 600 18px/1.2 var(--serif); }
+  .preview-body { flex: 1; position: relative; overflow: auto; background: var(--bg); }
+  #pages { padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  #pages .page { position: relative; width: 100%; max-width: 820px; }
+  #pages img { width: 100%; background: #fff; border-radius: 3px;
+               box-shadow: 0 1px 4px rgba(0,0,0,.35); display: block; }
+  .preview .placeholder { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+                          color: var(--muted); font-size: 14px; text-align: center; padding: 24px; }
+  .preview.stale #pages img { opacity: .35; transition: opacity .2s; }
+  /* While the preview updates, each page shows a spinner in its middle. */
+  .page .veil { position: absolute; inset: 0; display: none; }
+  .preview.stale .page .veil { display: block; }
+  .spinner { position: absolute; top: 50%; left: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; z-index: 2; }
+  .busy { color: var(--muted); font-size: 13px; }
+  /* Uniform layout: rarely used, so a quiet line at the foot of the setlist card. */
+  .layout-opt { display: flex; align-items: center; gap: 4px; margin-top: 14px; }
+  .toggle { display: inline-flex; gap: 7px; align-items: center; margin: 0; cursor: pointer;
+            font-weight: 400; color: var(--muted); font-size: 13px; }
+  .toggle input { width: auto; margin: 0; }
+  .layout-opt .info { color: var(--muted); font-size: 13px; cursor: help; padding: 2px 4px; border-radius: 4px; }
+  .layout-opt + .row { margin: 10px 0 0; }
+  @media (max-width: 600px) {
+    .status { padding-left: 24px; padding-right: 24px; }
+    main { padding-left: 16px; padding-right: 16px; }
+    #songs select { max-width: 116px; }
+  }
+  @media (min-width: 700px) {
+    .status { padding: 8px 32px 0; }
+  }
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; }
+    .preview { position: relative; top: 0; height: 80vh; }
+  }
+</style>
+</head>
+<body>
+<header class="sky">
+  <nav class="topnav" aria-label="Main">
+    <span class="logo" id="logo" role="img" aria-label="诸圣堂 All Saints' Church"></span>
+    <a href="/" aria-current="page"><span class="full">Find songs</span><span class="short">Songs</span></a>
+    <a href="/sets" data-tab="sets"><span class="full">Setlists</span><span class="short">Sets</span></a>
+    <a href="/convert"><span class="full">Convert PDF</span><span class="short">Convert</span></a>
+  </nav>
+  <h1 class="visually-hidden">YFM · Find songs</h1>
+  <div class="status" id="status">Loading library…</div>
+</header>
+
+<main>
+  <div class="side">
+  <div class="tabs" role="tablist" aria-label="Kind of setlist">
+    <button type="button" role="tab" id="tabOnce" data-mode="once" aria-controls="setPanel">One-time</button>
+    <button type="button" role="tab" id="tabService" data-mode="service" aria-controls="setPanel">Service sets</button>
+  </div>
+  <section class="card setlist-card" role="tabpanel" id="setPanel">
+    <div class="notice" id="setNotice" role="status" hidden></div>
+    <div class="row" id="onceBox">
+      <div class="grow"><label for="setName">Name <span class="optional">(optional)</span></label>
+        <input type="text" id="setName" maxlength="60" autocomplete="off"></div>
+    </div>
+    <div id="serviceBox" hidden>
+    <p class="tab-help">For worship leaders planning a service: pick the service date to save this setlist for the
+      team. Everyone can see it on <a href="/sets">Setlists</a>.</p>
+    <div class="row">
+      <div class="grow" id="dateBox">
+        <label for="setDate">Date</label>
+        <div class="date-field">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/>
+            <path d="M3 10h18M8 3v4M16 3v4"/></svg>
+          <span class="when" id="dateText"></span><span class="chev" aria-hidden="true">▼</span>
+          <input type="date" id="setDate" autocomplete="off">
+          <button type="button" class="clear-date" id="clearDate" aria-label="Clear the date" title="No date" hidden>✕</button>
+        </div>
+        <div class="date-note" id="dateNote" aria-live="polite" hidden></div>
+      </div>
+    </div>
+    </div>
+    <h2 class="part">Find songs</h2>
+    <div class="search">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <input type="search" id="q" placeholder="Title, pinyin or initials…" autocomplete="off" autofocus
+             aria-label="Search songs">
+    </div>
+    <div class="sources" id="sourceFilter" role="group" aria-label="Sources to search" hidden></div>
+    <ul class="results" id="results"><li class="empty" style="cursor:default">Search by title, pinyin (e.g. <i>jiao wo tai</i>) or initials (e.g. <i>jwtqtds</i>).</li></ul>
+    <h2 class="part">Setlist</h2>
+    <ol id="songs"></ol>
+    <div class="empty" id="noSongs">No songs yet — search and add some.</div>
+    <div class="btns">
+      <button class="secondary" id="startOver" disabled title="Clear the setlist">Start over</button>
+      <button class="secondary" id="saveBtn" disabled>Share link</button>
+      <button id="downloadBtn" disabled>Download PDF</button>
+    </div>
+    <div class="saved" id="saved" hidden></div>
+    <div class="error" id="error"></div>
+    <div class="layout-opt">
+      <label class="toggle"><input type="checkbox" id="uniform" autocomplete="off"> Uniform layout</label>
+      <span class="info" tabindex="0" role="img" aria-label="Typeset every song the same way from the library's ChordPro files (includes any edits made there). Off: each song's original PDF with only the chords changed."
+            data-tip="Typeset every song the same way from the library's ChordPro files (includes any edits made there). Off: each song's original PDF with only the chords changed.">ⓘ</span>
+    </div>
+    <div class="row" id="uniformOpts">
+      <div class="grow"><label for="columns">Columns</label>
+        <select id="columns" autocomplete="off"><option>1</option><option selected>2</option></select></div>
+      <div class="grow"><label for="paper">Paper</label>
+        <select id="paper" autocomplete="off"><option>A4</option><option>Letter</option></select></div>
+    </div>
+  </section>
+  </div>
+
+  <section class="card preview" id="previewCard" aria-label="Setlist preview">
+    <div class="preview-bar">
+      <h2>Preview</h2>
+      <span class="visually-hidden" id="busy" aria-live="polite"></span>
+    </div>
+    <div class="preview-body">
+      <div id="pages" hidden></div>
+      <div class="placeholder" id="placeholder">Add songs to see the setlist PDF here.</div>
+      <div class="spinner" id="spinner" hidden></div>
+    </div>
+  </section>
+</main>
+
+<script>
+// This week's Saturday (today, if it's Saturday), as "2026-10-03".
+const pad = n => String(n).padStart(2, "0");
+function upcomingSaturday() {
+  const d = new Date();
+  d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7));
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+// Default file name: this week's Saturday, e.g. "03-10-2026 Setlist".
+function defaultName() { return nameFor(upcomingSaturday()); }
+// A one-time setlist with no name of its own: "Setlist 5 Oct 2026" (today).
+function onceName() {
+  return "Setlist " + new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+const SEARCH_HELP = "Search by title, pinyin (e.g. <i>jiao wo tai</i>) or initials (e.g. <i>jwtqtds</i>).";
+const MAJOR = ["C","Db","D","Eb","E","F","F#","G","Ab","A","Bb","B"];
+const MINOR = ["Cm","C#m","Dm","Ebm","Em","Fm","F#m","Gm","G#m","Am","Bbm","Bm"];
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+// "Living Hope · v2 [MM]": which of its source's arrangements (its label, or v2, v3…; nothing for
+// the first), and each source's sheet it is, as a coloured chip.
+const srcClass = name => "src src-" + String(name).toLowerCase().replace(/[^a-z0-9]/g, "");
+const sourceChips = s => (s.sources || []).map(n => `<span class="${srcClass(n)}">${esc(n)}</span>`).join("");
+const titled = s => {
+  const name = s.label || (s.number > 1 ? `v${s.number}` : "");
+  return `${esc(s.title)}${name ? ` <span class="tag">· ${esc(name)}</span>` : ""}${sourceChips(s)}`;
+};
+const sub = s => [s.artist, s.folder, (s.source_file || "").replace(/\s*\(\d\)(?=\.pdf$)/i, ""),
+  s.auto && "converted automatically, may need checking"].filter(Boolean).join(" · ");
+
+// Setlist state: [{slug, title, artist, folder, source_file, key, to}]
+let songs = [];
+
+// ---------------------------------------------------------------- library status
+const ago = t => {
+  const min = Math.round((Date.now() / 1000 - t) / 60);
+  return min < 1 ? "just now" : min < 60 ? `${min} min ago` : `${Math.round(min / 60)} h ago`;
+};
+
+async function loadStatus(note) {
+  try {
+    const s = await (await fetch("/api/library/status")).json();
+    $("status").classList.toggle("warn", !s.songs);
+    $("status").textContent = s.songs ? `${s.songs.toLocaleString()} songs in the library`
+      : s.drive ? "The song library is empty — check the Google Drive folder."
+      : "The song library is empty.";
+    if (s.drive) {
+      // Just after a restart the site serves its copy while the first check of Drive runs.
+      $("status").append(note || s.synced_at ? ` · synced ${note || ago(s.synced_at)}` : " · checking Google Drive for changes");
+      const btn = document.createElement("button");
+      btn.className = "secondary";
+      btn.textContent = "Sync now";
+      btn.title = `Just added or changed a file in Google Drive? Pick it up now instead of within ${
+        s.sync_minutes >= 60 ? "the hour" : `${s.sync_minutes || 5} minutes`}.`;
+      btn.onclick = syncLibrary;
+      $("status").append(btn);
+    }
+    sources = s.sources || [];
+    drawSourceFilter();
+  } catch (_) { $("status").textContent = "Can't reach the server."; }
+}
+
+// ---------------------------------------------------------------- source filter
+// Which sources search leaves out, remembered on this device (a convenience: without storage,
+// every source is on).
+let sources = [], sourcesOff = new Set();  // sources: [{name, songs}], from library status
+try { sourcesOff = new Set(JSON.parse(localStorage.getItem("sourcesOff") || "[]")); } catch (_) {}
+function drawSourceFilter() {
+  const names = sources.map(s => s.name);
+  sourcesOff = new Set([...sourcesOff].filter(n => names.includes(n)));
+  const box = $("sourceFilter"), filtered = sourcesOff.size > 0;
+  box.hidden = sources.length < 2;
+  box.innerHTML = `<span class="label">${filtered ? `<span class="on">Filtered:</span>` : "Sources:"}</span>` +
+    sources.map(s => `<button type="button" class="chip ${srcClass(s.name)}" data-source="${esc(s.name)}" aria-pressed="${!sourcesOff.has(s.name)}"
+      title="${esc(s.name)}: ${s.songs.toLocaleString()} songs">${esc(s.name)}</button>`).join("") +
+    (filtered ? `<button type="button" class="secondary clear">Show all</button>` : "");
+}
+function setSourcesOff(off) {
+  sourcesOff = off;
+  try { localStorage.setItem("sourcesOff", JSON.stringify([...off])); } catch (_) {}
+  drawSourceFilter();
+  search();
+}
+$("sourceFilter").onclick = e => {
+  if (e.target.closest(".clear")) return setSourcesOff(new Set());
+  const chip = e.target.closest(".chip");
+  if (!chip) return;
+  const off = new Set(sourcesOff), name = chip.dataset.source;
+  off.has(name) ? off.delete(name) : off.add(name);
+  if (off.size === sources.length) return;  // at least one source stays on
+  setSourcesOff(off);
+};
+function sourcesParam() {
+  return sourcesOff.size ? "&sources=" + encodeURIComponent(sources.map(s => s.name).filter(n => !sourcesOff.has(n)).join(",")) : "";
+}
+
+async function syncLibrary(e) {
+  const btn = e.target;
+  btn.disabled = true;
+  btn.textContent = "Syncing…";
+  if (sources.length) {  // the three sources take about a minute to look through; say so
+    const wait = document.createElement("span");
+    wait.className = "wait";
+    wait.textContent = "Checking Google Drive for changes: this takes about a minute.";
+    btn.after(wait);
+  }
+  try {
+    const r = await (await fetch("/api/library/sync", { method: "POST" })).json();
+    if (r.error) throw new Error(r.error);
+    const n = r.updated.length, gone = r.removed.length, added = r.new_songs.length;
+    const changes = [n && `${n} file${n > 1 ? "s" : ""} updated`, gone && `${gone} removed`,
+      added && `new: ${r.new_songs.join(", ")}`].filter(Boolean).join(", ") || "no changes";
+    await loadStatus(`just now (${changes})`);
+    if (r.failed.length) {
+      $("status").classList.add("warn");
+      $("status").append(` — couldn't add ${r.failed.join("; ")}`);
+    }
+    if (n || gone || added) search();
+  } catch (err) {
+    await loadStatus();
+    $("status").classList.add("warn");
+    $("status").append(` — sync failed: ${err.message}`);
+  }
+}
+
+// ---------------------------------------------------------------- search
+let searchTimer = null, searchSeq = 0;
+$("q").oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(search, 200); };
+async function search() {
+  const q = $("q").value.trim(), seq = ++searchSeq;
+  const ul = $("results");
+  if (!q) { clearTimeout(searchLogTimer); results = []; ul.innerHTML = `<li class="empty" style="cursor:default">${SEARCH_HELP}</li>`; return; }
+  const data = await (await fetch("/api/library/search?q=" + encodeURIComponent(q) + sourcesParam())).json();
+  if (seq !== searchSeq) return;
+  results = data.results;
+  ul.innerHTML = results.length ? "" : `<li class="empty" style="cursor:default">No songs match “${esc(q)}”${
+    sourcesOff.size ? " in the sources picked" : ""}.</li>`;
+  renderResults();
+  // Tracked once the typing stops, so "h", "ho", "hop" don't each count as a search.
+  clearTimeout(searchLogTimer);
+  const found = results.length;  // this search's count (an emptied box resets `results` meanwhile)
+  searchLogTimer = setTimeout(() => track("search", { q, results: found }), 1500);
+}
+let searchLogTimer = null;
+// The last search's results. Songs already in the setlist say "Added" and can't be added again.
+let results = [];
+function renderResults() {
+  if (!results.length) return;
+  const added = new Set(songs.map(s => s.slug));
+  // Songs that share a title ("我相信", "Hosanna") are told apart by how they start.
+  const count = {};
+  for (const r of results) count[r.title.toLowerCase()] = (count[r.title.toLowerCase()] || 0) + 1;
+  const opening = r => count[r.title.toLowerCase()] > 1 && r.first_line ? `<span class="opening">“${esc(r.first_line)}”</span> · ` : "";
+  $("results").innerHTML = results.map((r, i) => `
+    <li data-i="${i}" class="${added.has(r.slug) ? "added" : ""}">
+      <div class="grow"><div class="title">${titled(r)}</div><div class="path">${opening(r)}${esc(sub(r))}</div></div>
+      ${r.transposable === false ? `<span class="badge" style="color:var(--muted);background:var(--bg)" data-tip="Image-only PDF: can be added, but not transposed">as is</span>` : ""}
+      ${r.key ? `<span class="badge" title="Chart key${r.original_key && r.original_key !== r.key ? ` (the original key is ${esc(r.original_key)})` : ""}">${esc(r.key)}</span>` : ""}
+      ${added.has(r.slug) ? `<span class="add added-tag">✓ Added</span>` : `<button class="secondary add" tabindex="-1">+ Add</button>`}
+    </li>`).join("");
+}
+$("results").onclick = e => {
+  const li = e.target.closest("li[data-i]");
+  if (li && !li.classList.contains("added")) addSong(results[+li.dataset.i]);
+};
+
+// ---------------------------------------------------------------- setlist
+function addSong(r) {
+  if (songs.some(s => s.slug === r.slug)) return;  // already in the setlist
+  songs.push({ ...r, to: null });  // starts in the chart's own key
+  track("song_added", { slug: r.slug, title: r.title, q: $("q").value.trim(), mode: mode });
+  render(); changed();
+}
+
+function keySelect(s, i) {
+  if (s.missing) return s.to ? `<span class="note">${esc(s.to)}</span>` : "";  // no chart to change the key of
+  if (s.transposable === false) {
+    const keys = s.keys && s.keys.length > 1 ? s.keys : null;
+    if (!keys) return `<span class="note" tabindex="0" data-tip="This sheet is an image, so it's added exactly as it is">${s.key ? esc(s.key) + " · " : ""}original PDF</span>`;
+    // Can't transpose, but the song exists as a separate PDF in each of these keys.
+    return `<select data-i="${i}" aria-label="Key for ${esc(s.title)}" title="Original PDFs are available in these keys">${
+      keys.map(k => `<option value="${k}" ${k === (s.to || s.key) ? "selected" : ""}>${k}${k === s.original_key ? " (original)" : ""}</option>`).join("")}</select>`;
+  }
+  if (!s.key) return `<span class="note" tabindex="0" data-tip="The chart's key isn't known, so it can't be transposed: it's added as it is">key unknown — as is</span>`;
+  const src = s.key, list = MINOR.includes(src) ? MINOR : MAJOR, i0 = list.indexOf(src);
+  const opts = list.map((k, j) => {
+    let d = (j - i0 + 12) % 12; if (d > 6) d -= 12;
+    const tags = [k === s.original_key ? "original" : "", k === src ? "chart key" : ""].filter(Boolean);
+    if (!tags.length) tags.push(`${d > 0 ? "+" : "−"}${Math.abs(d)}`);
+    const label = `${k} (${tags.join(", ")})`;
+    return `<option value="${k}" ${k === (s.to || src) ? "selected" : ""}>${label}</option>`;
+  }).join("");
+  return `<select data-i="${i}" aria-label="Key for ${esc(s.title)}">${opts}</select>`;
+}
+
+function render() {
+  $("songs").innerHTML = songs.map((s, i) => `
+    <li data-i="${i}">
+      <span class="grip" title="Drag to reorder" aria-hidden="true">⋮⋮</span>
+      <span class="num">${i + 1}</span>
+      <div class="grow"><div class="title">${titled(s)}</div><div class="path">${
+        s.missing ? `<span class="note">${s.slug ? "No longer in the library" : "Not in the library"}</span>` : esc(sub(s))}</div></div>
+      ${keySelect(s, i)}
+      <button class="del" data-i="${i}" title="Remove" aria-label="Remove ${esc(s.title)}">✕</button>
+    </li>`).join("");
+  $("noSongs").hidden = songs.length > 0;
+  renderResults();  // "+ Add" / "Added" follows what's in the setlist
+  $("startOver").disabled = !songs.length;
+  $("downloadBtn").disabled = !songs.length || $("downloadBtn").hasAttribute("aria-busy");  // busy: its PDF is building
+  updateSaveButton();
+}
+
+$("songs").addEventListener("change", e => {
+  if (e.target.tagName !== "SELECT") return;
+  const s = songs[+e.target.dataset.i];
+  s.to = e.target.value;
+  track("key_changed", { slug: s.slug, title: s.title, to: s.to });
+  changed();
+});
+$("songs").addEventListener("click", e => {
+  const d = e.target.closest(".del");
+  if (!d) return;
+  const [gone] = songs.splice(+d.dataset.i, 1);
+  track("song_removed", { slug: gone.slug, title: gone.title });
+  render(); changed();
+});
+
+// Drag to reorder: move DOM nodes while dragging, rebuild the array on drop.
+// Pointer events rather than HTML5 drag-and-drop, which iOS Safari never fires.
+// The grip is the only handle, so a finger anywhere else on the row still scrolls.
+let drag = null;
+
+function dragTo(y) {
+  const list = $("songs");
+  drag.el.style.transform = `translateY(${y - drag.y}px)`;
+  const over = [...list.children].find(li => {
+    if (li === drag.el) return false;
+    const r = li.getBoundingClientRect();
+    return y >= r.top && y <= r.bottom;
+  });
+  if (!over) return;
+  const r = over.getBoundingClientRect();
+  list.insertBefore(drag.el, y > r.top + r.height / 2 ? over.nextSibling : over);
+  drag.y = y;                        // the row just changed slots: re-anchor it under the finger
+  drag.el.style.transform = "";
+}
+
+// Held near the top or bottom of the screen, the page keeps scrolling, so a long
+// setlist can be crossed without lifting the finger.
+function dragScroll() {
+  if (!drag) return;
+  const step = drag.at < 72 ? -10 : drag.at > innerHeight - 72 ? 10 : 0;
+  if (step) {
+    const was = scrollY;
+    scrollBy(0, step);
+    drag.y -= scrollY - was;         // the row scrolled with the page; the finger did not
+    dragTo(drag.at);
+  }
+  requestAnimationFrame(dragScroll);
+}
+
+$("songs").addEventListener("pointerdown", e => {
+  const grip = e.target.closest(".grip");
+  if (!grip || e.button) return;
+  const el = grip.closest("li"); if (!el) return;
+  e.preventDefault();
+  grip.setPointerCapture(e.pointerId);
+  drag = { el, id: e.pointerId, y: e.clientY, at: e.clientY };
+  el.classList.add("dragging");
+  requestAnimationFrame(dragScroll);
+});
+$("songs").addEventListener("pointermove", e => {
+  if (!drag || e.pointerId !== drag.id) return;
+  e.preventDefault();
+  drag.at = e.clientY;
+  dragTo(e.clientY);
+});
+function dragEnd(e) {
+  if (!drag || e.pointerId !== drag.id) return;
+  drag.el.classList.remove("dragging");
+  drag.el.style.transform = "";
+  drag = null;
+  const before = songs.map(s => s.slug).join();
+  songs = [...$("songs").children].map(li => songs[+li.dataset.i]);
+  if (songs.map(s => s.slug).join() !== before) track("reordered", { songs: songs.length });
+  render(); changed();
+}
+$("songs").addEventListener("pointerup", dragEnd);
+$("songs").addEventListener("pointercancel", dragEnd);
+
+// The setlist survives a refresh (sessionStorage: this tab only). A new tab, a new
+// visit or another person starts empty; "Start over" clears it on purpose.
+const STORE = "setlist";
+function changed() {
+  schedulePreview();
+  renderDates();
+  if (editing) editing.dirty = true;  // edits not yet saved to the set
+  remember();
+  keepDraft();
+}
+function remember() {
+  try {
+    sessionStorage.setItem(STORE, JSON.stringify({
+      date: $("setDate").value, name: $("setName").value, songs, editing,
+      uniform: $("uniform").checked, columns: $("columns").value, paper: $("paper").value }));
+  } catch (_) {}
+}
+function restore() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(STORE) || "null");
+    if (!saved) return;
+    if (saved.date) $("setDate").value = saved.date;
+    if (saved.name) $("setName").value = saved.name;
+    editing = saved.editing || null;
+    if (editing) mode = "service";
+    songs = (saved.songs || []).filter(s => s.slug || s.title);
+    $("uniform").checked = !!saved.uniform;
+    if (saved.columns) $("columns").value = saved.columns;
+    if (saved.paper) $("paper").value = saved.paper;
+  } catch (_) {}
+}
+try { localStorage.removeItem("setlist"); } catch (_) {}  // older versions kept it forever
+// The date is optional, until the builder holds a saved set: then clearing it in the phone's
+// picker puts it back.
+// iPhone's picker may report a change (its Reset button included) as "input" rather than
+// "change", so both are handled, once.
+async function datePicked() {
+  const input = $("setDate"), before = shownDate;
+  if (input.value === before) return;
+  if (!input.value && editing) {
+    input.value = before;
+    dateHint = "A saved set always has a date. For a setlist without one, use <b>One-time</b>.";
+    renderDates();
+    return;
+  }
+  shownDate = input.value;  // the same date arriving again (as "change" after "input") is ignored
+  if ($("error").textContent === NEED_DATE) $("error").textContent = "";
+  // Picking a date that has a set opens that set.
+  const id = takenDates[input.value];
+  if (id && id !== editing?.id) {
+    if (!(await openDatesSet(id))) input.value = before;  // said no: nothing changes
+    renderDates();
+    return;
+  }
+  changed();
+}
+$("setDate").addEventListener("change", datePicked);
+$("setDate").addEventListener("input", datePicked);
+// Desktop browsers only open the calendar from their own (here invisible) icon.
+$("setDate").onclick = () => { try { $("setDate").showPicker(); } catch (_) {} };
+$("clearDate").onclick = () => { $("setDate").value = ""; changed(); };
+$("startOver").onclick = () => {
+  if (songs.length && !confirm(`Clear all ${songs.length} song${songs.length > 1 ? "s" : ""} and start over?`)) return;
+  clearDraft();
+  songs = [];
+  $("setDate").value = "";
+  $("setName").value = "";
+  $("saved").hidden = true;
+  editing = null;
+  notice(null);
+  $("uniform").checked = false;
+  $("columns").value = "2";
+  $("paper").value = "A4";
+  $("error").textContent = "";
+  $("q").value = "";
+  results = [];
+  $("results").innerHTML = `<li class="empty" style="cursor:default">${SEARCH_HELP}</li>`;
+  try { sessionStorage.removeItem(STORE); } catch (_) {}
+  applyLayout();
+  render();
+  $("q").focus();
+};
+
+// ---------------------------------------------------------------- build + live preview
+// One-time: the PDF is named by its Name, or after today. A set's is named after its date (or, before
+// one is picked, this week's Saturday).
+function fileName() {
+  if (mode === "once") return $("setName").value.trim().replace(/\s+/g, " ") || onceName();
+  return $("setDate").value ? nameFor($("setDate").value) : defaultName();
+}
+$("setName").placeholder = onceName();  // what it's called with no name
+$("setName").oninput = changed;
+function payload() {
+  return JSON.stringify({
+    // A song not in the library (in a past set) has only its title; it's kept, but has no pages.
+    name: fileName(), songs: songs.map(s => s.slug ? { slug: s.slug, to: s.to } : { title: s.title, to: s.to }),
+    layout: $("uniform").checked ? "uniform" : "original", columns: +$("columns").value, paper: $("paper").value });
+}
+async function build(body, what = "pdf") {
+  const r = await fetch("/api/setlist/" + what, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+  if (!r.ok) throw new Error((await r.json()).error || "Couldn't build the PDF");
+  return what === "pdf" ? await r.blob() : await r.json();
+}
+
+// Rebuild the preview shortly after anything that changes the PDF (not the file name).
+let previewTimer = null, previewSeq = 0, lastPreview = null;
+// The PDF, built ahead on a phone so Download PDF can share it at once.
+const ahead = pdfAhead(build, on => {
+  pdfBusy($("downloadBtn"), on);
+  $("downloadBtn").disabled = on || !songs.length;
+});
+function schedulePreview() {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(refreshPreview, 500);
+}
+async function refreshPreview() {
+  const body = payload();
+  const content = JSON.stringify({ ...JSON.parse(body), name: "" });
+  if (content === lastPreview) { if (songs.length) ahead.prepare(body); return; }
+  const seq = ++previewSeq;
+  if (!songs.length) {
+    lastPreview = content;
+    $("pages").hidden = true; $("placeholder").hidden = false; $("busy").textContent = "";
+    $("spinner").hidden = true;
+    return;
+  }
+  $("previewCard").classList.add("stale");
+  $("busy").textContent = "Updating preview";
+  $("spinner").hidden = !$("pages").hidden;  // the first build; after that, each page has its own
+  try {
+    const { pages } = await build(body, "preview");
+    if (seq !== previewSeq) return;  // a newer change is already rendering
+    lastPreview = content;
+    $("pages").innerHTML = pages.map((src, i) =>
+      `<div class="page"><img src="${src}" alt="Setlist page ${i + 1} of ${pages.length}"><div class="veil"><div class="spinner"></div></div></div>`).join("");
+    $("pages").hidden = false; $("placeholder").hidden = true;
+    $("busy").textContent = "";
+    $("error").textContent = "";
+    ahead.prepare(body);
+  } catch (err) {
+    if (seq === previewSeq) { $("busy").textContent = ""; $("error").textContent = err.message; }
+  } finally {
+    if (seq === previewSeq) { $("previewCard").classList.remove("stale"); $("spinner").hidden = true; }
+  }
+}
+
+$("downloadBtn").onclick = async () => {
+  $("error").textContent = "";
+  try {
+    await savePdf(ahead, payload(), fileName() + ".pdf");
+    track("pdf_downloaded", { songs: songs.length, mode: mode, layout: $("uniform").checked ? "uniform" : "original" });
+  }
+  catch (err) { $("error").textContent = err.message; }
+};
+
+function applyLayout() { $("uniformOpts").hidden = !$("uniform").checked; changed(); }
+$("uniform").onchange = applyLayout;
+$("columns").onchange = $("paper").onchange = changed;
+
+// ---------------------------------------------------------------- one-time or service set
+// The two tabs: "once" (the default) for anyone who wants a PDF or a share link, "service" for
+// worship leaders saving a set under its date. Each device remembers the last one used (a
+// convenience: without storage, it's One-time); a saved set in the builder always shows Service sets.
+let mode = "once";
+try { if (localStorage.getItem("setlistTab") === "service") mode = "service"; } catch (_) {}
+function setMode(m) {
+  // Leaving a saved set for One-time: the songs stay, as a copy; the set itself is left alone.
+  // Unsaved changes to it would then only be in the copy, so that's asked first.
+  if (m === "once" && editing && editing.dirty && !confirm(`Your changes to the set for ${
+      longDate(editing.date)} aren't saved.\n\nSwitch to One-time anyway? The songs come along as a copy; ` +
+      "the set stays as it was last saved.")) {
+    track("tab_kept", { mode: "service", why: "unsaved changes" });
+    drawTabs();  // stay on Service sets
+    return;
+  }
+  if (m === "once" && editing) {
+    editing = null;
+    notice(null);
+    $("saved").hidden = true;
+    remember();
+  }
+  if (m !== mode) {
+    mode = m;
+    track("tab", { mode: m });
+    try { localStorage.setItem("setlistTab", m); } catch (_) {}
+    if ($("error").textContent === NEED_DATE) $("error").textContent = "";
+  }
+  drawTabs();
+  renderDates();
+}
+function drawTabs() {
+  for (const tab of document.querySelectorAll("[role=tab]")) {
+    const on = tab.dataset.mode === mode;
+    tab.setAttribute("aria-selected", on);
+    tab.tabIndex = on ? 0 : -1;
+    if (on) $("setPanel").setAttribute("aria-labelledby", tab.id);
+  }
+  $("serviceBox").hidden = mode !== "service";
+  $("onceBox").hidden = mode !== "once";
+}
+document.querySelector("[role=tablist]").addEventListener("click", e => {
+  const tab = e.target.closest("[role=tab]");
+  if (tab) setMode(tab.dataset.mode);
+});
+// Left and right arrows move between the tabs, as in any tab list.
+document.querySelector("[role=tablist]").addEventListener("keydown", e => {
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  e.preventDefault();
+  setMode(mode === "once" ? "service" : "once");
+  document.querySelector("[role=tab][aria-selected=true]").focus();
+});
+
+// ---------------------------------------------------------------- sets
+// A set is this setlist saved on the server under its date, for the whole team to see.
+// `editing` is the set this builder holds ({id, version, dirty}), or null for a new setlist.
+let editing = null;
+// The address share links start with, and which dates already have a set.
+async function loadSettings() {
+  try {
+    shareBase = (await (await fetch("/api/features")).json()).share_link_base || "";
+  } catch (_) {}
+  loadTakenDates();
+}
+
+// ---------------------------------------------------------------- the set's date
+// Shown in full ("Sat, 3 Oct 2026"), with a warning if that date already has another set.
+let takenDates = {};  // "2026-10-03" -> set id
+let shownDate = "";   // the date last shown ("" for none), to go back to
+const NEED_DATE = "Pick a date for the set first.";
+let dateHint = "";    // a note to show once under the date
+async function loadTakenDates() {
+  try {
+    const { upcoming, past } = await (await fetch("/api/sets")).json();
+    takenDates = Object.fromEntries([...upcoming, ...past].map(s => [s.date, s.id]));
+  } catch (_) {}
+  renderDates();
+}
+// Under it, a note: which set you're updating, where Update set will move it, or (before
+// anything is loaded) that the date has a set you can open.
+function renderDates() {
+  const cur = $("setDate").value, other = takenDates[cur] && takenDates[cur] !== editing?.id ? takenDates[cur] : null;
+  shownDate = cur;
+  $("dateText").textContent = cur ? longDate(cur) : "Pick the service date";
+  $("dateText").classList.toggle("unset", !cur);
+  $("clearDate").hidden = !cur || !!editing;  // a saved set always has a date
+  $("clearDate").parentElement.classList.toggle("clearable", !$("clearDate").hidden);
+  let note = "", warn = false;
+  if (dateHint) {
+    note = dateHint;
+    dateHint = "";  // shown once
+  } else if (other) {
+    note = `This date already has a set. <a href="#" data-open="${other}">Open it</a>`;
+    warn = true;
+  } else if (editing && editing.date && cur !== editing.date) {
+    note = `<b>Update set</b> moves this set from ${esc(longDate(editing.date))} to ${esc(longDate(cur))}.`;
+  } else if (editing) {
+    note = "You're updating the existing set for this date. <b>Update set</b> saves your changes for everyone.";
+  }
+  $("dateNote").innerHTML = note;
+  $("dateNote").hidden = !note;
+  $("dateNote").classList.toggle("warn", warn);
+  updateSaveButton();
+}
+$("dateNote").onclick = e => {
+  const a = e.target.closest("[data-open]");
+  if (!a) return;
+  e.preventDefault();
+  openDatesSet(+a.dataset.open);
+};
+// Open the set on the chosen date, asking first if that would drop songs not yet saved.
+// Returns false if the viewer said no.
+async function openDatesSet(id) {
+  const unsaved = songs.length && (!editing || editing.dirty);
+  if (unsaved && !confirm(`${longDate($("setDate").value)} already has a set. Open it?\n\nThe songs here now will be replaced.`))
+    return false;
+  await openSet(id);
+  return true;
+}
+async function sendSet(method, url, body) {
+  const r = await fetch(url, { method, headers: body ? { "Content-Type": "application/json" } : {},
+                               body: body && JSON.stringify(body) });
+  return { status: r.status, data: r.status === 404 ? {} : await r.json() };
+}
+
+// A message above the setlist, with buttons: notice("text", [["Label", fn, secondary?], ...]).
+function notice(html, actions = []) {
+  const el = $("setNotice");
+  el.hidden = !html;
+  if (!html) return;
+  el.innerHTML = `<div>${html}</div>` + (actions.length ? `<div class="btns">${actions.map(([label, , secondary], i) =>
+    `<button data-i="${i}" class="${secondary ? "secondary" : ""}">${esc(label)}</button>`).join("")}</div>` : "");
+  el.onclick = e => { const b = e.target.closest("button[data-i]"); if (b) actions[+b.dataset.i][1](); };
+}
+
+// Put a saved set into the builder.
+function loadSet(set) {
+  songs = set.songs;
+  $("setDate").value = set.date;
+  $("uniform").checked = set.layout === "uniform";
+  $("columns").value = String(set.columns);
+  $("paper").value = set.paper;
+  editing = { id: set.id, version: set.version, date: set.date };
+  setMode("service");
+  notice(null);
+  $("saved").hidden = true;
+  $("error").textContent = "";
+  applyLayout();
+  editing.dirty = false;
+  remember();
+  render();
+}
+async function openSet(id) {
+  const { status, data } = await sendSet("GET", `/api/sets/${id}`);
+  if (status === 404) { setGone(); return; }
+  loadSet(data);
+}
+function setGone() {
+  editing = null;
+  changed();
+  render();
+  notice("This set has been deleted. <b>Save as set</b> saves what's here as a new one.");
+}
+
+function setBody() {
+  const { name, ...options } = JSON.parse(payload());
+  return { ...options, date: $("setDate").value };
+}
+async function saveSet(body, how = editing ? "update" : "create") {
+  $("error").textContent = "";
+  $("saved").hidden = true;
+  notice(null);
+  if (!body.date) {
+    $("error").textContent = NEED_DATE;
+    try { $("setDate").showPicker(); } catch (_) { $("setDate").focus(); }
+    return;
+  }
+  $("saveBtn").disabled = true;
+  try {
+    const { status, data } = how === "create" ? await sendSet("POST", "/api/sets", body)
+      : await sendSet("PUT", `/api/sets/${body.id}`, body);
+    if (status === 404) return setGone();
+    if (status === 409 && data.existing) return dateTaken(body, data.existing);
+    if (status === 409 && data.set) return changedElsewhere(body, data.set);
+    if (status >= 400) throw new Error(data.error || "Couldn't save the set.");
+    editing = { id: data.id, version: data.version, date: data.date, dirty: false };
+    track("set_saved", { how, date: data.date, songs: songs.length, mode: "service" });
+    clearDraft();  // it's saved now
+    remember();
+    loadTakenDates();
+    $("saved").innerHTML = `Saved as the set for ${esc(longDate(data.date))}. <a href="/sets">See all sets</a> ·
+      <a href="#" data-copy="${esc(setLink(data.id))}">Copy link</a>`;
+    $("saved").hidden = false;
+  } catch (err) { $("error").textContent = err.message; }
+  finally { render(); }
+}
+$("saveBtn").onclick = () => {
+  if (mode === "once") return shareLink();
+  saveSet({ ...setBody(), ...(editing && { id: editing.id, version: editing.version }) });
+};
+
+// ---------------------------------------------------------------- share links
+// On One-time, the middle button shares the songs as a link instead of saving a set: a hidden
+// snapshot anyone with the link can open (the same songs and keys give the same link).
+let shareBase = "";  // e.g. a church site's address that redirects here; "" = this site
+const shareLinkFor = code => shareBase ? `${shareBase}#s=${code}` : `${location.origin}/s/${code}`;
+const setLink = id => shareBase ? `${shareBase}#set=${id}` : `${location.origin}/sets/${id}`;
+// Share link on One-time; on Service sets, Save as set (once there's a date) or Update set.
+function updateSaveButton() {
+  const service = mode === "service";
+  $("saveBtn").textContent = !service ? "Share link" : editing ? "Update set" : "Save as set";
+  $("saveBtn").disabled = !songs.length || (service && !$("setDate").value);
+}
+// Safari only lets a page copy during the tap itself, so the copy starts at once with a promise
+// of the text. Returns whether it worked.
+async function copyText(textPromise) {
+  try {
+    if (window.ClipboardItem && navigator.clipboard?.write) {
+      await navigator.clipboard.write([new ClipboardItem({
+        "text/plain": textPromise.then(t => new Blob([t], { type: "text/plain" })) })]);
+      return true;
+    }
+  } catch (_) {}
+  try { await navigator.clipboard.writeText(await textPromise); return true; } catch (_) { return false; }
+}
+function showLink(link, copied, what) {
+  $("saved").innerHTML = (copied ? `Link copied. Anyone with it can open ${what}:<br>`
+                                  : `Copy this link to share ${what}:<br>`) + `<a href="${esc(link)}">${esc(link)}</a>`;
+  $("saved").hidden = false;
+}
+function shareLink() {
+  $("error").textContent = "";
+  $("saved").hidden = true;
+  const setlist = JSON.parse(payload());
+  setlist.name = $("setName").value;  // its own name, not the file name made up without one
+  const made = fetch("/api/shares", { method: "POST", headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify(setlist) })
+    .then(async r => {
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || "Couldn't make the link.");
+      track("share_link", { songs: songs.length, mode: "once", named: !!setlist.name });
+      return shareLinkFor(data.code);
+    });
+  const copying = copyText(made);
+  made.then(async link => showLink(link, await copying, "these songs"))
+      .catch(err => { $("error").textContent = err.message; });
+}
+$("saved").addEventListener("click", async e => {
+  const a = e.target.closest("[data-copy]");
+  if (!a) return;
+  e.preventDefault();
+  const link = a.dataset.copy;
+  showLink(link, await copyText(Promise.resolve(link)), "this set");
+});
+
+// The date already has another set: open that one instead, or replace it with this setlist.
+function dateTaken(body, other) {
+  const list = other.songs.map(s => s.title).join(", ") || "no songs";
+  const actions = [["Open it", () => {
+    if (songs.length && !confirm("Open the saved set? What's in the builder now will be replaced.")) return;
+    loadSet(other);
+  }]];
+  // A past set is what the team sang: it can be opened and changed, but not replaced.
+  const d = new Date(), today = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  if (other.date >= today) {
+    if (!editing) actions.push(["Replace it", () => {
+      if (confirm(`Replace the set for ${longDate(other.date)} (${list}) with this one?`))
+        saveSet({ ...body, id: other.id, version: other.version }, "update");
+    }, true]);
+    // Moving the set being edited onto that date: this one takes the other's place, and the other goes.
+    else actions.push(["Replace it", () => {
+      if (confirm(`Move this set to ${longDate(other.date)} and delete the set there (${list})? This can't be undone.`))
+        saveSet({ ...body, replace: other.id }, "update");
+    }, true]);
+  }
+  actions.push(["Cancel", () => notice(null), true]);
+  notice(`<b>${esc(longDate(other.date))}</b> already has a set: ${esc(list)}.`, actions);
+}
+
+// Someone updated the set since this builder opened it.
+function changedElsewhere(body, current) {
+  notice("Someone changed this set since you opened it.", [
+    ["Reload theirs", () => loadSet(current)],
+    ["Overwrite with mine", () => saveSet({ ...body, version: current.version }, "update"), true],
+  ]);
+}
+
+// While editing, look for changes made elsewhere: when the tab comes back, and every 30 s.
+// Nothing reloads by itself; a banner offers to.
+async function checkForChanges() {
+  if (!editing || document.hidden) return;
+  const { status, data } = await sendSet("GET", `/api/sets/${editing.id}`).catch(() => ({}));
+  if (status === 404) return setGone();
+  if (status !== 200 || [editing.version, editing.seen].includes(data.version) || !$("setNotice").hidden) return;
+  notice(editing.dirty ? "Someone else updated this set. Reloading shows their version and drops your unsaved changes."
+                       : "Someone else updated this set.",
+         [["Reload", () => loadSet(data)], ["Not now", () => { editing.seen = data.version; notice(null); }, true]]);
+}
+watchForChanges(checkForChanges);
+// Others may have saved sets meanwhile: which dates have one is looked up again on return.
+document.addEventListener("visibilitychange", () => { if (!document.hidden) loadTakenDates(); });
+
+async function init() {
+  await loadSettings();
+  const id = new URLSearchParams(location.search).get("set");
+  if (id) {
+    history.replaceState(null, "", "/");  // a refresh keeps working from this tab's copy
+    await openSet(id);
+  } else if (editing) {
+    checkForChanges();
+  } else if (!songs.length) {
+    await offerDraft();
+  }
+  draftReady = true;
+}
+
+// ---------------------------------------------------------------- drafts
+// Unsaved work outlives the tab: what's in the builder is kept as a draft on this device and,
+// once someone has typed their name, under the name on the server (any device). The builder
+// still opens empty; a draft from the last 14 days is offered back, never loaded unasked.
+// Saving the set, Start over or Discard clears it. Download and Share link don't: people come
+// back to change a key.
+const DRAFT_KEY = "draft", DRAFT_DAYS = 14;
+let draftReady = false, draftOffered = false, draftTimer = null;
+let keptSongs = 0;                 // songs in the draft last kept: emptying the builder clears it
+let draftSync = Promise.resolve(); // the server hears keeps and clears in the order they happen
+const toServer = (method, body) => {
+  if (!yourName.get()) return;
+  const url = draftUrl();
+  draftSync = draftSync.then(() => fetch(url, body ? { method, headers: { "Content-Type": "application/json" },
+                                                       body: JSON.stringify(body) } : { method })).catch(() => {});
+};
+const draftUrl = () => `/api/people/${encodeURIComponent(yourName.get())}/draft`;
+
+// What's in the builder worth keeping: songs not yet saved anywhere (null: nothing).
+function draftNow() {
+  if (!songs.length || (editing && !editing.dirty)) return null;
+  return { songs, mode, name: $("setName").value, date: $("setDate").value, editing,
+           uniform: $("uniform").checked, columns: $("columns").value, paper: $("paper").value, at: Date.now(),
+           by: yourName.get() };  // whose it is: "" for a guest
+}
+// Called on every change. Only songs added withdraw an offer on screen (a date or layout picked
+// first doesn't), and only taking out the last song of a kept draft clears it: nothing else
+// here ever deletes one.
+function keepDraft() {
+  if (!draftReady) return;  // the page is still setting itself up
+  if (draftOffered && songs.length) { draftOffered = false; notice(null); }  // new songs instead
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(() => {
+    const draft = draftNow();
+    if (!draft) { if (!songs.length && keptSongs) clearDraft(); return; }
+    keptSongs = draft.songs.length;
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch (_) {}
+    toServer("PUT", { draft });
+  }, 1500);
+}
+function clearDraft() {
+  clearTimeout(draftTimer);
+  keptSongs = 0;
+  try { localStorage.removeItem(DRAFT_KEY); } catch (_) {}
+  toServer("DELETE");
+}
+// A name typed now: with songs in the builder they're kept under it; with none, whatever that
+// name kept elsewhere is offered.
+addEventListener("namechange", () => {
+  if (!draftReady || !yourName.get()) return;
+  if (songs.length) keepDraft();
+  else if (!editing) offerDraft();
+});
+
+// "today, 8:48", "yesterday, 21:10" or "Mon, 5 Oct, 8:48".
+function draftWhen(ms) {
+  const d = new Date(ms), day = x => new Date(x).toDateString();
+  const time = d.toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit" });
+  if (day(ms) === day(Date.now())) return `today, ${time}`;
+  if (day(ms) === day(Date.now() - 864e5)) return `yesterday, ${time}`;
+  return `${d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}, ${time}`;
+}
+async function offerDraft() {
+  const found = [], name = yourName.get();
+  let local = null;
+  try { local = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null"); } catch (_) {}
+  let server = null, asked = false;
+  if (name) {
+    try { server = (await (await fetch(draftUrl())).json()).draft; asked = true; } catch (_) {}
+  }
+  // This device's copy of the name's draft, which the server no longer has: it was saved or
+  // discarded on another device (or ran out), so it's not offered.
+  if (local && name && asked && !server && local.by && local.by.toLowerCase() === name.toLowerCase()) {
+    try { localStorage.removeItem(DRAFT_KEY); } catch (_) {}
+    local = null;
+  }
+  if (local) found.push({ ...local, from: "device" });
+  if (server) found.push({ ...server, from: "name" });
+  const draft = found.filter(d => d.songs?.length && Date.now() - d.at < DRAFT_DAYS * 864e5).sort((a, b) => b.at - a.at)[0];
+  if (!draft || songs.length) return;
+  const names = draft.songs.map(s => s.title), shown = names.slice(0, 3).map(esc).join(", ") +
+    (names.length > 3 ? ` and ${names.length - 3} more` : "");
+  const what = draft.editing ? `Your unsaved changes to the set for ${esc(longDate(draft.editing.date))} (${draftWhen(draft.at)})`
+                             : `You have an unsaved setlist from ${draftWhen(draft.at)}`;
+  notice(`${what}: ${shown}.`, [["Continue it", () => useDraft(draft)], ["Discard", () => {
+    track("draft_discarded", { songs: names.length });
+    draftOffered = false; notice(null); clearDraft();
+  }, true]]);
+  draftOffered = true;
+  track("draft_offered", { songs: names.length, from: draft.from, hours: Math.round((Date.now() - draft.at) / 36e5) });
+}
+function useDraft(draft) {
+  draftOffered = false;
+  notice(null);
+  setMode(draft.editing ? "service" : draft.mode === "service" ? "service" : "once");
+  songs = draft.songs;
+  editing = draft.editing ? { ...draft.editing, dirty: true } : null;
+  $("setName").value = draft.name || "";
+  $("setDate").value = draft.date || "";
+  $("uniform").checked = !!draft.uniform;
+  if (draft.columns) $("columns").value = draft.columns;
+  if (draft.paper) $("paper").value = draft.paper;
+  keptSongs = songs.length;  // this page's draft now
+  track("draft_continued", { songs: songs.length, editing: !!editing });
+  applyLayout();  // redraws the preview and keeps it, as any change does
+  render();
+  if (editing) checkForChanges();  // someone may have changed that set meanwhile
+}
+
+loadStatus();
+restore();
+drawTabs();
+applyLayout();
+render();
+init();
+
+</script>
+</body>
+</html>

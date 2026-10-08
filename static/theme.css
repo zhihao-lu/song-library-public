@@ -1,0 +1,158 @@
+/* The site's look, shared by every page. The top of each page is a sky (the bar with three
+   stars in it, the page's heading) over a hill with the logo's star glowing on its crest; below
+   the hill is the page itself. Keys are the one red thing. nav.js draws the stars, hill and name.
+   Night by default; by day (the device's light setting) the same scene in daylight.
+   Pages use these colours by name and add only their own layout. */
+:root {
+  color-scheme: dark;
+  --sky: #18253F;          /* the sky behind the bar and heading */
+  --bg: #0F1726;           /* the page: the hill rising into it */
+  --panel: #172135;        /* cards and boxes */
+  --field: #0F1726;        /* inputs and rows inside a card */
+  --text: #E8ECF3;
+  --soft: #C3CBD8;         /* song titles in lists */
+  --muted: #93A0B6;
+  --line: #25314A;
+  --line-strong: #3A4763;  /* outlines of buttons and inputs */
+  --key: #F26D78;          /* keys, song numbers on a set, the current page */
+  --key-soft: rgba(242, 109, 120, .12);
+  --accent: #E8ECF3;       /* primary buttons (with --accent-text), focus */
+  --accent-text: #0F1726;
+  --accent-soft: rgba(232, 236, 243, .07);
+  --warn: #F0C46A; --warn-soft: #2C2A22; --err: #FF9C8F;
+  --star: #FFD84D; --star-edge: #F2B705;
+  --stars: #F6F1DC;        /* the three stars in the sky */
+  --glow: rgba(255, 216, 77, .38);
+  --popover: #1E2B47; --guest-edge: #4A5878; --shadow: rgba(4, 8, 16, .55);
+  --exit-bg: rgba(15, 23, 38, .72);
+  --serif: "Source Serif 4", "Noto Serif SC", "Songti SC", serif;
+  --sans: "Hanken Grotesk", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+  --hill-h: 56px;
+}
+/* Daylight: the same sky, pale; the page white; navy ink; the keys a deeper red. */
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --sky: #E3EAF4; --bg: #FFFFFF; --panel: #F2F5F9; --field: #FFFFFF;
+    --text: #14203A; --soft: #33405A; --muted: #5A6680;
+    --line: #E1E7EF; --line-strong: #C3CCDA;
+    --key: #B3202E; --key-soft: rgba(179, 32, 46, .08);
+    --accent: #14203A; --accent-text: #FFFFFF; --accent-soft: rgba(20, 32, 58, .06);
+    --warn: #8A5A00; --warn-soft: #FFF3D6; --err: #B3261E;
+    --stars: #C99A10;
+    --glow: rgba(242, 183, 5, .42);
+    --popover: #FFFFFF; --guest-edge: #9AA6BA; --shadow: rgba(20, 32, 58, .18);
+    --exit-bg: rgba(255, 255, 255, .85);
+  }
+}
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.45 var(--sans);
+       -webkit-font-smoothing: antialiased; }
+a { color: var(--text); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[hidden] { display: none !important; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.serif { font-family: var(--serif); }
+
+/* ------------------------------------------------------------------ the sky */
+.sky { position: relative; background: var(--sky); padding-bottom: calc(var(--hill-h) + 10px); }
+.sky > :not(.sky-art, .visually-hidden) { position: relative; }  /* above the stars and hill */
+.sky-art { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.sky .topnav { z-index: 10; }  /* its name box opens over the page below */
+.sky-art .hill { position: absolute; left: 0; bottom: -1px; width: 100%; height: calc(var(--hill-h) + 1px); }
+.sky-art .hill path { fill: var(--bg); }
+/* The logo's star on the hill's crest (73.4% across, 31% of the hill's height down), glowing. */
+.sky-art .glow { position: absolute; left: calc(73.4% - 55px); bottom: calc(var(--hill-h) * .686 - 47px);
+                 width: 110px; height: 110px; border-radius: 50%;
+                 background: radial-gradient(circle, var(--glow), rgba(255, 216, 77, 0) 65%); }
+.sky-art .crest { position: absolute; left: calc(73.4% - 10px); bottom: calc(var(--hill-h) * .686 - 2px);
+                  width: 20px; height: 20px; }
+
+.page-head { padding: 10px 24px 0; }
+.page-head h1, h1.page-title { margin: 0; font: 600 30px/1.1 var(--serif); letter-spacing: -.015em; }
+.page-head p { margin: 6px 0 0; color: var(--muted); font-size: 15px; }
+@media (min-width: 700px) {
+  :root { --hill-h: 70px; }
+  .page-head { padding: 16px 32px 0; }
+  .page-head h1, h1.page-title { font-size: 36px; }
+  .sky-art .crest { width: 22px; height: 22px; left: calc(73.4% - 11px); }
+}
+
+/* ------------------------------------------------------------------ the bar */
+.topnav { display: flex; align-items: center; gap: 2px; padding: 8px 10px 8px 14px; }
+.topnav .logo { display: inline-flex; height: 30px; margin-right: 6px; color: var(--text); flex: none; touch-action: manipulation; }
+.topnav .logo svg { height: 100%; width: auto; }
+.topnav .logo .ink { fill: currentColor; }
+.topnav > a { flex: none; padding: 10px 6px; color: var(--muted); text-decoration: none; font-weight: 500;
+              font-size: 14px; white-space: nowrap; }
+.topnav > a:hover { color: var(--text); }
+.topnav > a[aria-current=page] { color: var(--text); font-weight: 600; box-shadow: inset 0 -2px 0 var(--key); }
+.topnav .full { display: none; }
+/* Three stars, for the night He was born: small, faint and loosely scattered, high in the sky in
+   the bar's open stretch between the pages and your name (left out where there's no room). */
+.topnav .stars { flex: 1 1 0; min-width: 0; align-self: stretch; display: flex; align-items: center;
+                 justify-content: center; overflow: hidden; color: var(--stars); container-type: inline-size; }
+.topnav .stars svg { flex: none; width: 46px; height: 30px; }
+@container (max-width: 52px) { .topnav .stars svg { display: none; } }
+@media (min-width: 700px) {
+  .topnav { gap: 4px; padding: 10px 32px; }
+  .topnav .logo { height: 34px; margin-right: 16px; }
+  .topnav > a { padding: 10px 12px; font-size: 15px; }
+  .topnav .full { display: inline; }
+  .topnav .short { display: none; }
+}
+
+/* Your name, at the right of the bar on every page: "Guest" until it's set. */
+.who { position: relative; margin-left: auto; flex: none; }
+.who > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+                 max-width: 110px; padding: 3px 10px 3px 3px; border-radius: 999px; font-size: 13px;
+                 font-weight: 600; background: var(--accent-soft); color: var(--text); }
+.who > summary::-webkit-details-marker { display: none; }
+.who .avatar { flex: none; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center;
+               justify-content: center; background: var(--text); color: var(--bg); font-size: 12px; font-weight: 700; }
+.who .who-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.who.guest > summary { color: var(--soft); background: transparent; border: 1px dashed var(--guest-edge); padding: 2px 9px 2px 2px; }
+.who.guest .avatar { background: var(--line); color: var(--soft); }
+.who-box { position: absolute; right: 0; top: calc(100% + 8px); z-index: 20; width: min(300px, calc(100vw - 24px));
+           padding: 16px; border-radius: 10px; background: var(--popover); border: 1px solid var(--line-strong);
+           box-shadow: 0 16px 40px var(--shadow); display: flex; flex-direction: column; gap: 8px; }
+.who-box label { font-size: 13px; font-weight: 600; color: var(--muted); }
+.who-box small { color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+.who-box .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+@media (min-width: 700px) {
+  .who > summary { max-width: 180px; gap: 8px; padding: 4px 14px 4px 4px; font-size: 14px; }
+  .who.guest > summary { padding: 3px 13px 3px 3px; }
+  .who .avatar { width: 28px; height: 28px; font-size: 13px; }
+}
+
+/* ------------------------------------------------------------------ parts every page uses */
+button, .button { font: inherit; font-size: 15px; font-weight: 600; line-height: 1.3; border-radius: 6px;
+                  padding: 10px 16px; cursor: pointer; text-align: center; text-decoration: none;
+                  border: 1px solid var(--accent); background: var(--accent); color: var(--accent-text); }
+button.secondary, .button.secondary { background: transparent; color: var(--text); border-color: var(--line-strong); }
+button.secondary:hover, .button.secondary:hover { border-color: var(--muted); }
+button:disabled { opacity: .45; cursor: default; }
+input[type=search], input[type=text], input[type=date], select, textarea {
+  font: inherit; color: var(--text); background: var(--field); border: 1px solid var(--line-strong);
+  border-radius: 8px; padding: 9px 10px; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--muted); }
+input[type=checkbox] { accent-color: var(--key); }
+.card { background: var(--panel); border-radius: 10px; padding: 16px; }
+.card > h2, .card-title { margin: 0 0 12px; font: 600 22px/1.2 var(--serif); letter-spacing: -.01em; color: var(--text); }
+.section-title { margin: 0 0 12px; font: 600 22px/1.2 var(--serif); letter-spacing: -.01em; }
+.field-label, label.field-label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 5px; }
+.key { color: var(--key); font-weight: 700; }
+.error { color: var(--err); }
+.spinner { border: 4px solid var(--line); border-top-color: var(--text); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+/* A button at work ("Generating PDF…"): a small spinner before its words. */
+.btn-spinner { display: inline-block; width: 14px; height: 14px; margin-right: 8px; vertical-align: -2px;
+               border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%;
+               animation: spin .8s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .spinner, .btn-spinner { animation-duration: 2.4s; } }
+/* The bin: a set's Delete, as an icon. */
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 44px; padding: 0;
+            background: transparent; color: var(--muted); border-color: var(--line-strong); }
+.icon-btn:hover { color: var(--err); border-color: var(--err); }
+.icon-btn svg { width: 17px; height: 17px; }

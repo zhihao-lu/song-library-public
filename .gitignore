@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Song sheets are usually copyrighted (CCLI/SongSelect etc.) - keep them out of the repo
+*.pdf
+*.cho
+*.png
+# ...except the two public-domain sample songs
+!examples/library/*.cho
+
+.DS_Store
+
+# Secrets and caches
+.env
+data/
+
+# The song library lives in Google Drive, not here (see README).
+*.db

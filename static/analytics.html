@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>YFM · Songs we sing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Noto+Serif+SC:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,400..700&display=swap">
+<link rel="stylesheet" href="/static/theme.css">
+<style>
+  /* One hue (the dataviz reference blue): the total bars, and each count's cell shaded light->dark. */
+  :root { --bar: #3987e5; --heat-0: #172b4a; --heat-1: #3987e5; --heat-text: #fff; }
+  @media (prefers-color-scheme: light) { :root { --bar: #2a78d6; --heat-0: #e6effb; --heat-1: #184f95; } }
+  body { margin: 0; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font: 600 28px/1.2 var(--serif); margin: 0 0 4px; }
+  .lead { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; margin-bottom: 16px; }
+  .controls label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+  .controls select, .controls input[type=search] { width: auto; min-width: 140px; }
+  .controls .check { display: flex; gap: 6px; align-items: center; font-size: 14px; color: var(--text); font-weight: 400;
+                     margin: 0; padding-bottom: 10px; }
+  .controls .check input { width: auto; margin: 0; }
+  .controls .spacer { flex: 1; }
+  .card { padding: 0; overflow: hidden; }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { position: sticky; top: 0; background: var(--panel); text-align: left; color: var(--muted); font-size: 12px;
+       font-weight: 600; padding: 10px 8px; white-space: nowrap; cursor: pointer; user-select: none; }
+  th[aria-sort] { color: var(--text); }
+  th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td { padding: 7px 8px; border-top: 1px solid var(--line); vertical-align: middle; }
+  td.rank { color: var(--muted); width: 1%; font-variant-numeric: tabular-nums; }
+  td.song { min-width: 180px; cursor: pointer; }
+  td.song .t { font-weight: 500; }
+  td.song .a { color: var(--muted); font-size: 12px; }
+  td.total { min-width: 120px; }
+  .tbar { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+  .tbar i { display: block; height: 10px; background: var(--bar); border-radius: 0 4px 4px 0; }
+  .tbar b { min-width: 2ch; text-align: right; }
+  td.cell { min-width: 44px; }
+  td.cell span { display: inline-block; min-width: 26px; padding: 2px 6px; border-radius: 4px; text-align: center; }
+  td.cell .zero { color: var(--muted); opacity: .45; }
+  td.last { color: var(--muted); white-space: nowrap; font-size: 13px; }
+  tr.detail td { background: var(--field); font-size: 13px; padding: 10px 14px; }
+  .dates { display: flex; flex-wrap: wrap; gap: 6px; }
+  .dates span { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; }
+  .dates .k { color: var(--key); font-weight: 700; }
+  .dates .soon { border-style: dashed; }
+  .empty { color: var(--muted); padding: 24px; text-align: center; }
+  .note { color: var(--muted); font-size: 12px; margin-top: 10px; }
+  .tip { position: fixed; z-index: 10; pointer-events: none; padding: 6px 9px; border-radius: 6px; font-size: 12px;
+         background: var(--popover, var(--panel)); color: var(--text); border: 1px solid var(--line-strong); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Songs we sing</h1>
+  <p class="lead" id="lead">Loading the sets…</p>
+  <div class="controls">
+    <div><label for="pivot">Count by</label>
+      <select id="pivot">
+        <option value="year">Year</option><option value="quarter">Quarter</option><option value="month">Month</option>
+        <option value="leader">Worship leader</option><option value="key">Key</option><option value="">Total only</option>
+      </select></div>
+    <div><label for="period">Period</label><select id="period"><option value="">All time</option></select></div>
+    <div><label for="find">Song</label><input type="search" id="find" placeholder="Title, pinyin or initials…" autocomplete="off"></div>
+    <label class="check"><input type="checkbox" id="upcoming"> Include sets still to come</label>
+    <span class="spacer"></span>
+    <button type="button" class="secondary" id="csv">Download CSV</button>
+  </div>
+  <section class="card"><div class="scroll" id="table"></div></section>
+  <p class="note">Each time a song is in a set counts once. Its arrangements count as one song. A set counts as sung
+    once its date has passed (a Saturday's from 5 pm).</p>
+</div>
+<div class="tip" id="tip" hidden></div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const short = iso => { const [y, m, d] = iso.split("-"); return `${+d} ${MONTHS[m - 1]} ${y}`; };
+
+// What each pivot groups a row by, and how its columns are named and ordered.
+const PIVOTS = {
+  year: { of: r => r.date.slice(0, 4), name: k => k, order: (a, b) => a.localeCompare(b) },
+  quarter: { of: r => `${r.date.slice(0, 4)} Q${Math.floor((r.date.slice(5, 7) - 1) / 3) + 1}`, name: k => k,
+             order: (a, b) => a.localeCompare(b) },
+  month: { of: r => r.date.slice(0, 7), name: k => `${MONTHS[k.slice(5) - 1]} ${k.slice(2, 4)}`,
+           order: (a, b) => a.localeCompare(b) },
+  leader: { of: r => r.leader || "Not recorded", name: k => k, order: null },  // ordered by how much each led
+  key: { of: r => r.key || "?", name: k => k, order: null },
+};
+
+let data = { rows: [] }, sort = { col: "total", dir: -1 }, open = new Set();
+try { const s = JSON.parse(localStorage.getItem("analytics") || "{}");
+      if (s.pivot !== undefined) $("pivot").value = s.pivot; if (s.upcoming) $("upcoming").checked = true; } catch (_) {}
+
+// The songs the search box matches (null: no search), found by the server exactly as the main
+// page's search finds songs, so both change together.
+let found = null, findTimer = null, findSeq = 0;
+async function findSongs() {
+  const q = $("find").value.trim(), seq = ++findSeq;
+  if (!q) { found = null; return draw(); }
+  try {
+    const { songs } = await (await fetch("/api/analytics/find?q=" + encodeURIComponent(q))).json();
+    if (seq !== findSeq) return;  // a newer search is on its way
+    found = new Set(songs);
+    draw();
+  } catch (_) {}
+}
+
+function chosen() {
+  const period = $("period").value;
+  return data.rows.filter(r => (r.past || $("upcoming").checked) && (!period || r.date.startsWith(period)) &&
+                               (!found || found.has(r.song)));
+}
+
+// One line per song: its total, its count per column, when it was last in a set, and each time.
+function tabulate(rows) {
+  const pivot = PIVOTS[$("pivot").value], songs = new Map(), colTotals = new Map();
+  for (const r of rows) {
+    let s = songs.get(r.song);
+    if (!s) songs.set(r.song, s = { song: r.song, title: r.title, artist: r.artist, total: 0, by: new Map(), times: [] });
+    s.total++; s.times.push(r);
+    if (pivot) {
+      const k = pivot.of(r);
+      s.by.set(k, (s.by.get(k) || 0) + 1);
+      colTotals.set(k, (colTotals.get(k) || 0) + 1);
+    }
+  }
+  let cols = [...colTotals.keys()];
+  if (pivot) cols.sort(pivot.order || ((a, b) => colTotals.get(b) - colTotals.get(a)));
+  const list = [...songs.values()];
+  for (const s of list) s.last = s.times.at(-1).date;
+  const value = s => sort.col === "total" ? s.total : sort.col === "title" ? s.title.toLowerCase()
+                   : sort.col === "last" ? s.last : s.by.get(sort.col) || 0;
+  list.sort((a, b) => (value(a) < value(b) ? -1 : value(a) > value(b) ? 1 : 0) * sort.dir || b.total - a.total ||
+                      a.title.localeCompare(b.title));
+  return { list, cols, pivot };
+}
+
+function draw() {
+  const rows = chosen(), { list, cols, pivot } = tabulate(rows);
+  const sets = new Set(rows.map(r => r.date)).size;
+  const span = rows.length ? `${short(rows[0].date)} to ${short(rows.at(-1).date)}` : "no sets";
+  $("lead").textContent = `${rows.length.toLocaleString()} songs sung across ${sets} services, ${span}.`;
+  if (!list.length) { $("table").innerHTML = `<p class="empty">No songs match.</p>`; return; }
+  const maxTotal = Math.max(...list.map(s => s.total));
+  const maxCell = Math.max(1, ...list.flatMap(s => [...s.by.values()]));
+  const th = (col, label, cls = "") => `<th class="${cls}" data-col="${esc(col)}"${sort.col === col ?
+    ` aria-sort="${sort.dir < 0 ? "descending" : "ascending"}"` : ""}>${esc(label)}${sort.col === col ? (sort.dir < 0 ? " ↓" : " ↑") : ""}</th>`;
+  const width = 2 + cols.length + 2;
+  $("table").innerHTML = `<table><thead><tr><th>#</th>${th("title", "Song")}${th("total", "Times sung", "num")}${
+      cols.map(c => th(c, pivot.name(c), "num")).join("")}${th("last", "Last in a set")}</tr></thead><tbody>${
+    list.map((s, i) => {
+      const cells = cols.map(c => {
+        const n = s.by.get(c) || 0, mix = n ? Math.round(20 + 80 * n / maxCell) : 0;
+        return `<td class="num cell">${n ? `<span data-tip="${esc(s.title)}: ${n}× in ${esc(pivot.name(c))}"
+          style="background:color-mix(in oklab, var(--heat-1) ${mix}%, var(--heat-0));${mix > 55 ? "color:var(--heat-text)" : ""}">${n}</span>`
+          : `<span class="zero">·</span>`}</td>`;
+      }).join("");
+      const row = `<tr data-song="${esc(s.song)}"><td class="rank">${i + 1}</td>
+        <td class="song"><div class="t">${esc(s.title)}</div>${s.artist ? `<div class="a">${esc(s.artist)}</div>` : ""}</td>
+        <td class="num total"><div class="tbar"><i style="width:${Math.max(4, 70 * s.total / maxTotal)}px"></i><b>${s.total}</b></div></td>
+        ${cells}<td class="last">${short(s.last)}</td></tr>`;
+      return row + (open.has(s.song) ? `<tr class="detail"><td colspan="${width}"><div class="dates">${
+        s.times.slice().reverse().map(t => `<span class="${t.past ? "" : "soon"}">${short(t.date)}${t.leader ? ` · ${esc(t.leader)}` : ""}${
+          t.key ? ` · <span class="k">${esc(t.key)}</span>` : ""}${t.past ? "" : " · to come"}</span>`).join("")}</div></td></tr>` : "");
+    }).join("")}</tbody></table>`;
+}
+
+$("table").addEventListener("click", e => {
+  const h = e.target.closest("th[data-col]");
+  if (h) {
+    const col = h.dataset.col;
+    sort = sort.col === col ? { col, dir: -sort.dir } : { col, dir: col === "title" ? 1 : -1 };
+    return draw();
+  }
+  const tr = e.target.closest("tr[data-song]");
+  if (tr) { open.has(tr.dataset.song) ? open.delete(tr.dataset.song) : open.add(tr.dataset.song); draw(); }
+});
+for (const id of ["pivot", "period", "upcoming"]) $(id).addEventListener("change", () => {
+  if (id === "pivot" && !PIVOTS[$("pivot").value] && sort.col !== "title" && sort.col !== "last") sort = { col: "total", dir: -1 };
+  try { localStorage.setItem("analytics", JSON.stringify({ pivot: $("pivot").value, upcoming: $("upcoming").checked })); } catch (_) {}
+  draw();
+});
+$("find").addEventListener("input", () => { clearTimeout(findTimer); findTimer = setTimeout(findSongs, 200); });
+
+// The table as it stands (filters and pivot included), for a spreadsheet.
+$("csv").onclick = () => {
+  const { list, cols, pivot } = tabulate(chosen());
+  const q = v => `"${String(v).replace(/"/g, '""')}"`;
+  const lines = [["Rank", "Song", "Artist", "Times sung", ...cols.map(c => pivot.name(c)), "Last in a set"].map(q).join(",")];
+  list.forEach((s, i) => lines.push([i + 1, s.title, s.artist, s.total, ...cols.map(c => s.by.get(c) || 0), s.last].map(q).join(",")));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["﻿" + lines.join("\n")], { type: "text/csv" }));
+  a.download = `songs-we-sing${$("period").value ? "-" + $("period").value : ""}${$("pivot").value ? "-by-" + $("pivot").value : ""}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+
+const tip = $("tip");
+document.addEventListener("pointermove", e => {
+  const el = e.target.closest?.("[data-tip]");
+  if (!el) { tip.hidden = true; return; }
+  tip.textContent = el.dataset.tip; tip.hidden = false;
+  tip.style.left = Math.min(innerWidth - tip.offsetWidth - 8, e.clientX + 12) + "px";
+  tip.style.top = (e.clientY - 36) + "px";
+});
+
+(async () => {
+  try {
+    data = await (await fetch("/api/analytics/sung")).json();
+  } catch (_) { $("lead").textContent = "Couldn't load the sets."; return; }
+  const years = [...new Set(data.rows.map(r => r.date.slice(0, 4)))].sort().reverse();
+  $("period").insertAdjacentHTML("beforeend", years.map(y => `<option value="${y}">${y}</option>`).join(""));
+  const thisYear = data.today.slice(0, 4);  // the site's own date (Singapore time)
+  if (years.includes(thisYear)) $("period").value = thisYear;
+  draw();
+})();
+</script>
+</body>
+</html>
